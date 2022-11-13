@@ -1,0 +1,612 @@
+---
+title: "`dplyr` Weekend Homework"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    df_print: paged
+    css: ../../../styles.css
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, eval = TRUE)
+```
+<br>
+
+
+
+As this is your first weekend homework, here are some tips: 
+
+* Try to schedule some time in your weekend to work on the homework so it's not suddenly Monday morning and you haven't gotten started yet (it happens).
+* Remember that the weekend homework is for your learning, so try to use it as an opportunity to apply and consolidate everything you've learned in the week.
+* Also use it as an opportunity to spend a bit more time making your code readable and reproducible, by practising commenting and writing some text around your steps and findings. You will thank yourself later! 
+  * This will be especially useful for this specific weekend homework as it's very open-ended and you will eventually forget your own thought process
+* A bit obvious, but don't spend your entire weekend working on the homework! Remember to spend time doing things you enjoy and rest up ahead of the following week.
+
+The data for this weekend homework is scraped from Goodreads (a website all about books) and made publicly available on Kaggle. You can read more about the data [here](https://www.kaggle.com/jealousleopard/goodreadsbooks).
+
+# MVP
+
+### First steps
+
+Load necessary packages and read in `books.csv`. Investigate dimensions, variables, missing values - you know the drill!
+
+### Up to you
+
+Now it's up to you... For this weekend homework there will be no specific tasks, just you and this dataset! Using everything you've learned this week, try to describe/summarise at least 5 things about this dataset - using R and the tidyverse of course! Feel free to find and use new functions if there is something that the tidyverse doesn't offer, but do try to use this homework to apply what you have learned this week. Be prepared to share one of your findings on Monday!
+
+### Remember
+
+Before you submit, go through your weekend homework and make sure your code is following best practices as laid out in the `coding_best_practice` lesson.
+
+# Answer
+
+Game on. I'll just keep this as the stream of consciousness of my working through this and append the highlights at the end. Everybody loves a TL;DR.
+
+<details>
+<summary>**Libraries and data import**</summary>
+
+```{r}
+library(tidyverse)
+```
+```{r}
+books <- read_csv("data/books.csv")
+```
+</details>
+
+## First Steps
+
+Let's do a few of the standards to get us started, shall we?
+
+```{r}
+books %>% 
+  glimpse()
+
+books %>% 
+  head()
+
+colSums(is.na(books))
+```
+
+11,123 rows! 13 columns! **No NAs!**
+
+Nothing too off about the data types on the columns.
+</details>
+
+## Distinct authors and publishers
+
+Let's have a look at a couple of things off the bat. How many unique publishers and authors are there?
+
+We can use `distinct` to pull out every unique entry. Note -- it's worth acknowledging that, particularly with something like an author name, there's actually a (pretty high!) risk of this ***not*** returning an accurate count. A quick google suggests there are at least 11 authors called Dan Brown, and only one of them wrote The Da Vinci Code! This is why you don't use names as primary keys in databases!
+
+```{r}
+books %>% 
+  distinct(authors) %>% 
+  summarise(no_authors = n())
+
+books %>% 
+  distinct(publisher) %>% 
+  summarise(no_publishers = n())
+```
+
+So without any foreknowledge about naming conflicts, there's 6639 distinct authors and 2290 distinct publishers.
+
+## Min and Max
+
+Top 5 longest books?
+
+```{r}
+books %>% 
+  slice_max(num_pages, n = 5) %>% 
+  summarise(title, authors, num_pages)
+```
+
+Interesting to note that all of these are combined volumes! "The Second World War" isn't labelled as such, but pasting the ISBN into google returns a six volume boxed set.
+
+```{r}
+books %>% 
+  slice_min(num_pages, n = 5) %>% 
+  summarise(title, authors, num_pages)
+```
+Well there's a fun finding! There's a whole bunch of books where `num_pages` = 0! Time to investigate!
+
+```{r}
+books %>% 
+  filter(num_pages == 0)
+```
+There are in fact 76 of them (which, yes, we already knew from `slice_min`, since it will return all ties which in this case is every zero)! 
+
+I'm seeing a few things that interest me:
+
+Firstly, there's more than one language code for English. `eng`, `en-GB` and `en-US` all appear here. This isn't an uncommon distinction to be made, but it's important to identify is occurring in the data.
+
+Secondly, there's a couple of rows here in which the author is `NOT A BOOK` which is intriguing to me. 
+
+Thirdly, I'm seeing "Audio" a lot here. My immediate guess is that these are audiobooks, which would explain the lack of a page count. Tossing the ISBN for the Da Vinci Code (0739339788) into google confirms this for me. I didn't realise that audiobooks had ISBN codes, so I'm actually learning things here!
+
+### NOT A BOOK
+
+I gotta know. Is there more of these?
+
+```{r}
+books %>% 
+  filter(authors == "NOT A BOOK")
+```
+
+3 more, turns out. Curiously, they're recorded as having 2 pages. Liner notes, perhaps?
+
+Shoutouts to The Goon Show, by the way. I love Spike Milligan, Harry Secombe and Peter Sellers.
+
+## Languages
+
+To reiterate my observation from before -- English has at least three language codes in this data set: `eng`, `en-GB` and `en-US`. Let's take a glance at the full language code list.
+
+```{r}
+books %>% 
+  distinct(language_code) %>% 
+  arrange(language_code)
+```
+27 distinct language codes. Turns out there's also an `en-CA` for Canada and `enm` is actually the language code for Middle English.
+
+Let's extend this a little bit and see how the data is broken down by language. I sort of expect Goodreads to be predominately English-speaking. Am I right?
+
+```{r}
+books %>% 
+  group_by(language_code) %>%
+  summarise(no_of_books = n()) %>% 
+  arrange(desc(no_of_books))
+```
+
+Sure am! note the high Spanish count -- I attribute this to Goodreads demonstrably being US-based (1408 `en-US`) and the USA having a large population of Spanish-speakers.
+
+## A return to Min and Max
+
+So returning the minimum number of pages isn't giving us a particularly useful answer and thanks to checking out `NOT A BOOK` earlier I know that returning a minimum that simply isn't zero won't help matters much.
+
+Let's break `num_pages` down into quartiles for a better look.
+
+```{r}
+no_of_pages <- books$num_pages
+quantile(no_of_pages)
+```
+Google tells me the average novel length is around 250-350 pages, so this seems like a realistic range when we know the extremely low end is likely audiobooks and the extreme high is anthologies.
+
+Let's filter at Q1 and see what we get.
+
+```{r}
+books %>% 
+  filter(num_pages == 192) %>% 
+  select(authors, title, num_pages)
+```
+221 books at this value! Interesting set looking at page 1. An art book and also Fullmetal Alchemist, which is a Manga. There's all sorts of different books in this data!
+
+## Books & authors
+
+Let's do some simple fun stuff.
+
+Who has the most books in the data? (again, naming conflicts not-withstanding)
+
+```{r}
+books %>% 
+  group_by(authors) %>% 
+  summarise(book_count = n()) %>% 
+  filter(book_count == max(book_count))
+```
+
+Two authors with 40 books! Prolific!
+
+Top 5 authors by book count, then?
+
+```{r}
+books %>% 
+  group_by(authors) %>% 
+  summarise(book_count = n()) %>% 
+  arrange(desc(book_count)) %>% 
+  head(5)
+```
+
+Who the heck is Rumiko Takahashi?
+
+```{r}
+books %>% 
+  select(title, authors) %>% 
+  filter(authors == "Rumiko Takahashi")
+```
+
+Manga? Fair enough.
+
+What is the highest rated book?
+
+```{r}
+books %>% 
+  select(title, authors, average_rating, ratings_count) %>% 
+  filter(average_rating == max(average_rating))
+```
+A few books sitting at 5/5! I included `ratings_count` here to see if any of the books had a particularly remarkable number of ratings, and the answer is unsurprisingly no.
+
+Let's do a quick breakdown of ratings_count
+
+```{r}
+no_of_ratings <- books$ratings_count
+quantile(no_of_ratings)
+mean(no_of_ratings)
+```
+Top book has just under 4.6 *million* ratings? I'd bet real money this is a Harry Potter book.
+
+```{r}
+books %>% 
+  filter(ratings_count == max(ratings_count)) %>% 
+  select(title, authors, average_rating, ratings_count)
+```
+
+Well, Twilight would have been my other guess. As an aside, what's the top 5?
+
+```{r}
+books %>% 
+  select(title, authors, average_rating, ratings_count) %>% 
+  arrange(desc(ratings_count)) %>% 
+  head(5)
+```
+
+I won't lie -- this list genuinely surprises me. I didn't expect to see Catcher in the Rye *or* The Hobbit here, and the only Harry Potter entry is book *three*? I need to know more!
+
+Time to use `stringr`! I don't really know the intricacies of how regular expressions work, but i do know how to do basic searches for strings!
+
+```{r}
+books %>% 
+  select(title, authors, average_rating, ratings_count) %>% 
+  filter(str_detect(title, "Harry Potter")) %>% 
+  arrange(desc(ratings_count))
+```
+Wait, hang on.
+
+```{r}
+books %>% 
+  select(title, authors, average_rating, ratings_count) %>% 
+  filter(str_detect(title, "Harry Potter  \\#1")) %>% 
+  arrange(desc(ratings_count))
+```
+
+Sidenote: It took me AGES to figure out I need all those spaces in that regex... Hopefully I'll understand why when we hit the regex lessons. I will definitely ask!
+
+My fascination here is that the first book (with both its names) only has 156 ratings?? Book 3 has 2.3 million!
+
+Well, OK then.
+
+Let's ask another fun question -- Which author has been rated the most times?
+
+```{r}
+books %>% 
+  select(title, authors, average_rating, ratings_count) %>% 
+  group_by(authors) %>% 
+  summarise(total_ratings = sum(ratings_count)) %>% 
+  arrange(desc(total_ratings)) %>% 
+  head(5)
+```
+Rowling top by a mile. Mary GrandPré is her illustrator, if you were wondering what that was about!
+
+OK, let's add another variable to this. An average of `average_rating` per author, alongside their total rating.
+
+```{r}
+books %>% 
+  select(title, authors, average_rating, ratings_count) %>% 
+  group_by(authors) %>% 
+  summarise(total_ratings = sum(ratings_count), avg_rating = mean(average_rating)) %>% 
+  arrange(desc(total_ratings)) %>% 
+  head(5)
+```
+
+Highest number of ratings *and* the highest average rating in the top 5 most popular authors. Harry Potter living up to its name as a beloved book series.
+
+Earlier we looked at breaking down rating numbers, so just to remind ourselves of the results:
+
+```{r}
+quantile(no_of_ratings)
+```
+
+Third quartile is 5000, so let's ask this -- what are the top 5 most highly rated books with 5000 ratings or more?
+
+```{r}
+books %>% 
+  select(title, authors, average_rating, ratings_count) %>% 
+  filter(ratings_count >= 5000) %>% 
+  arrange(desc(average_rating)) %>% 
+  head(5)
+```
+
+Ok this is much more like what I expected compared to the Twilight result. These books are all scoring a full point above Twilight, and have a reasonable number of ratings. Twilight does have 4 million votes though, so let's tighten the range on `ratings_count` and go again. A million votes seems reasonable, since there's only
+
+```{r}
+books %>% 
+  filter(ratings_count >= 1e6) %>% 
+  summarise(million_plus_votes = n())
+```
+
+30 books with 1 million or more votes in the data.
+
+```{r}
+books %>% 
+  select(title, authors, average_rating, ratings_count) %>% 
+  filter(ratings_count >= 1e6) %>% 
+  arrange(desc(average_rating)) %>% 
+  head(5)
+```
+
+Harry Potter securing his dominance. Really nice to see something else here too!
+
+## Publishers
+
+So we've had an explore of authors and their books, let's do an examination of the publishers.
+
+How many publishers are there?
+
+```{r}
+books %>% 
+  distinct(publisher) %>% 
+  summarise(publisher_count = n())
+```
+
+How many books have the top 5 publishers published? I'm not going to bother doing the bottom because the answer is 1
+
+```{r}
+books %>% 
+  group_by(publisher) %>% 
+  summarise(no_of_books = n()) %>% 
+  arrange(desc(no_of_books)) %>% 
+  head(5)
+```
+
+Here's a fun one -- Top 5 publishers by number of published authors.
+
+```{r}
+books %>% 
+  distinct(publisher, authors) %>% 
+  group_by(publisher) %>% 
+  summarise(no_of_authors = n()) %>% 
+  arrange(desc(no_of_authors)) %>% 
+  head(5)
+```
+
+Let's do some rankings similar to those we did across authors.
+
+Same as with authors -- top 5 publishers, their vote counts, and their average rating.
+
+```{r}
+books %>% 
+  select(title, publisher, average_rating, ratings_count) %>% 
+  group_by(publisher) %>% 
+  summarise(total_ratings = sum(ratings_count), avg_rating = mean(average_rating)) %>% 
+  arrange(desc(total_ratings)) %>% 
+  head(5)
+```
+
+Penguin absolutely crushing it.
+
+Let's see who the highest rated publisher is with more than a million ratings.
+
+```{r}
+books %>% 
+  select(title, publisher, average_rating, ratings_count) %>% 
+  group_by(publisher) %>% 
+  summarise(total_ratings = sum(ratings_count), avg_rating = mean(average_rating)) %>% 
+  filter(total_ratings > 1e6) %>% 
+  arrange(desc(avg_rating)) %>% 
+  head(5)
+```
+
+A completely different list! None of the top 5 by votes are here. Maybe if we push this to 2.5 million?
+
+```{r}
+books %>% 
+  select(title, publisher, average_rating, ratings_count) %>% 
+  group_by(publisher) %>% 
+  summarise(total_ratings = sum(ratings_count), avg_rating = mean(average_rating)) %>% 
+  filter(total_ratings > 2.5e6) %>% 
+  arrange(desc(avg_rating)) %>% 
+  head(5)
+```
+
+Scholastic looking pretty good now! Had the highest `avg_rating` in the top 5 totals, and is holding its own here against publisher with the half the number of ratings.
+
+## TL;DR
+
+All of these queries are somewhere above, but let's collect the headlines together.
+
+A data point in use here:
+
+Breakdown of total ratings by quartile
+
+```{r}
+quantile(no_of_ratings)
+```
+### Authors and Publishers
+
+Distinct authors and publishers:
+
+```{r}
+books %>% 
+  distinct(authors) %>% 
+  summarise(no_authors = n())
+
+books %>% 
+  distinct(publisher) %>% 
+  summarise(no_publishers = n())
+```
+
+Top 5 authors, by book count
+
+```{r}
+books %>% 
+  group_by(authors) %>% 
+  summarise(book_count = n()) %>% 
+  arrange(desc(book_count)) %>% 
+  head(5)
+```
+
+Top 5 most rated authors and their average rating
+
+```{r}
+books %>% 
+  select(title, authors, average_rating, ratings_count) %>% 
+  group_by(authors) %>% 
+  summarise(total_ratings = sum(ratings_count), avg_rating = mean(average_rating)) %>% 
+  arrange(desc(total_ratings)) %>% 
+  head(5)
+```
+
+Top 5 publishers by books published
+
+```{r}
+books %>% 
+  group_by(publisher) %>% 
+  summarise(no_of_books = n()) %>% 
+  arrange(desc(no_of_books)) %>% 
+  head(5)
+```
+
+Top 5 publishers by number of published authors
+
+```{r}
+books %>% 
+  distinct(publisher, authors) %>% 
+  group_by(publisher) %>% 
+  summarise(no_of_authors = n()) %>% 
+  arrange(desc(no_of_authors)) %>% 
+  head(5)
+```
+
+Top 5 most rated publishers
+
+```{r}
+books %>% 
+  select(title, publisher, average_rating, ratings_count) %>% 
+  group_by(publisher) %>% 
+  summarise(total_ratings = sum(ratings_count), avg_rating = mean(average_rating)) %>% 
+  arrange(desc(total_ratings)) %>% 
+  head(5)
+```
+
+Top 5 highest rated publishers with more than 1 million ratings (there's 50 of them)
+
+```{r}
+books %>% 
+  select(title, publisher, average_rating, ratings_count) %>% 
+  group_by(publisher) %>% 
+  summarise(total_ratings = sum(ratings_count), avg_rating = mean(average_rating)) %>% 
+  filter(total_ratings > 1e6) %>% 
+  arrange(desc(avg_rating)) %>% 
+  head(5)
+```
+
+Same again at 2.5 million (17 publishers)
+
+```{r}
+books %>% 
+  select(title, publisher, average_rating, ratings_count) %>% 
+  group_by(publisher) %>% 
+  summarise(total_ratings = sum(ratings_count), avg_rating = mean(average_rating)) %>% 
+  filter(total_ratings > 2.5e6) %>% 
+  arrange(desc(avg_rating)) %>% 
+  head(5)
+```
+
+
+### Books
+
+Top 5 longest books:
+
+```{r}
+books %>% 
+  select(title, authors, num_pages) %>% 
+  slice_max(num_pages, n = 5)
+```
+
+Top 5 most rated books:
+
+```{r}
+books %>% 
+  select(title, authors, average_rating, ratings_count) %>% 
+  arrange(desc(ratings_count)) %>% 
+  head(5)
+```
+
+Top 5 highest rated books amongst all books with more than 5000 (third quartile) ratings
+
+```{r}
+books %>% 
+  select(title, authors, average_rating, ratings_count) %>% 
+  filter(ratings_count >= 5000) %>% 
+  arrange(desc(average_rating)) %>% 
+  head(5)
+```
+
+Top 5 highest rated books amongst all books with more than 1 million ratings? (This equates to top 5 from the top 30 most rated)
+
+```{r}
+books %>% 
+  select(title, authors, average_rating, ratings_count) %>% 
+  filter(ratings_count >= 1e6) %>% 
+  arrange(desc(average_rating)) %>% 
+  head(5)
+```
+
+### Rogue's Gallery
+
+People love to both hate on and support stuff online, so you'll see huge stacks of minimum ratings and maximum ratings on whatever is popular at any given moment -- this is often referred to as "brigading". I thought as one last piece it would be fun to see who has attracted Goodreads users and smashed dislike.
+
+First off, how many authors have more than 1 million ratings?
+
+```{r}
+books %>% 
+  select(authors, ratings_count) %>% 
+  group_by(authors) %>% 
+  summarise(ratings = sum(ratings_count)) %>% 
+  filter(ratings > 1e6) %>% 
+  summarise(count = n())
+```
+
+40! Pretty convenient number.
+
+Ok then, in the top 40 most rated authors, who are the bottom 5 in average_rating? Who do we hate?!
+
+```{r}
+books %>% 
+  select(title, authors, average_rating, ratings_count) %>% 
+  filter(ratings_count > 1e6) %>% 
+  group_by(authors) %>% 
+  summarise(total_ratings = sum(ratings_count), avg_rating = mean(average_rating)) %>% 
+  arrange((avg_rating)) %>% 
+  head(5)
+```
+
+Congratulations, Elizabeth Gilbert! You have the dubious honour of being the least liked author in the top 40 most-rated authors in the data set!
+
+The crown should arguably go to Stephenie Meyer, since she has more than 3 times as many votes.
+
+```{r}
+books %>% 
+  filter(authors == "Elizabeth Gilbert") %>% 
+  select(title, ratings_count, average_rating) %>% 
+  arrange(desc(ratings_count)) %>% 
+  head(2)
+```
+
+```{r}
+books %>% 
+  filter(authors == "Stephenie Meyer") %>% 
+  select(title, ratings_count, average_rating) %>% 
+  arrange(desc(ratings_count)) %>% 
+  head(2)
+```
+
+
+```{r}
+books %>% 
+  filter(authors == "William Golding") %>% 
+  select(title, ratings_count, average_rating) %>% 
+  arrange(desc(ratings_count)) %>% 
+  head(2)
+```
+
+"Eat, Pray, Love", "Twilight", and "Lord of the Flies" sure aren't well-loved!
