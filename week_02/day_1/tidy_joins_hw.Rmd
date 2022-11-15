@@ -160,9 +160,7 @@ hat_observations_united %>%
 hat_observations_united %>% 
   filter(hat_type == "beret") %>% 
   group_by(date) %>% 
-  summarise(date, observation_count = sum(observation_count)) %>% 
-  ungroup() %>% 
-  distinct(date, observation_count) %>% 
+  summarise(observation_count = sum(observation_count)) %>% 
   slice_max(observation_count)
 ```
 
