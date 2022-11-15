@@ -101,3 +101,143 @@ Use `str_extract_all()` with a regular expression to find out which Twitter user
 Think about all the different characters which could be in a Twitter username, do a bit of online research
 </details>
 
+# Answers
+
+```{r}
+library(tidyverse)
+library(janitor)
+```
+
+## MVP
+
+**Question 1.**  
+Load the `code_clan_tweets.csv` data. Find the number of rows, columns, and list all the variable names. 
+
+```{r}
+tweets <- read_csv("data/code_clan_tweets.csv") %>% 
+  clean_names()
+
+tweets %>% 
+  glimpse()
+```
+
+**Question 2.**  
+Find the total number of favourites (stored in `favorite_count`) that CodeClan tweets have got. Don't add a tweet's `favorite_count` to the total when the tweet was quoted (see the `is_quote` variable). 
+
+```{r}
+tweets %>% 
+  filter(is_quote == FALSE) %>% 
+  summarise(total_favorites = sum(favorite_count))
+```
+
+**Question 3.**  
+Summarise the mean number of retweets (`retweet_count`), split by the type of platform that was used to tweet (`source`). Again, omit quoted tweets from the mean.
+
+```{r}
+tweets %>% 
+  filter(is_quote == FALSE) %>% 
+  group_by(source) %>% 
+  summarise(mean_retweets = mean(retweet_count))
+```
+
+**Question 4.**  
+Count the total number of likes (i.e. total of `favorite_count`), split by `media` type, and arrange them from most likes to least. Assume that any tweets without a listed `media` type are of type "text".
+
+```{r}
+
+#favorite count by group
+
+tweets %>% 
+  mutate(media_type = coalesce(media_type, "text")) %>% 
+  group_by(media_type) %>% 
+  summarise(total_favorites = sum(favorite_count)) %>% 
+  arrange(desc(total_favorites))
+
+#ordered by type, then ordered by favorite count starting with the highest, so all of type 1, type 2, ...
+
+tweets %>% 
+  mutate(media_type = coalesce(media_type, "text")) %>% 
+  group_by(media_type) %>% 
+  select(tweet_id, media_type, favorite_count) %>% 
+  arrange(media_type, desc(favorite_count))
+```
+
+**Question 5.**  
+Find the mean number of characters that a CodeClan tweet contains.  You can either find a way to count the text in the `text` variable, or use the variable `display_text_width` which contains a count. Checking both would be a good idea if possible to see if they match (but it's not essential).  
+
+```{r}
+tweets %>% 
+  mutate(text_width = str_length(text)) %>% 
+  select(tweet_id, text_width, display_text_width) %>% 
+  summarise(matches = sum(text_width == display_text_width),
+            too_small = sum(text_width > display_text_width),
+            too_large = sum(text_width < display_text_width))
+```
+
+`display_text_width` is only correct 16 times!!!
+
+```{r}
+tweets %>% 
+  mutate(text_width = str_length(text)) %>% 
+  summarise(mean_text = mean(text_width), mean_display = mean(display_text_width))
+```
+
+`mean_display` is typically reporting a value that is smaller than the real text count, so this makes sense.
+
+**Question 6.**  
+The `code_clan_info.csv` data file contains `status_url` along with other info. Load this in, and join it to the `code_clan_tweets` tibble, so that you have a `status_url` for each tweet. Decide which variable to join the tibbles on.  
+
+```{r}
+info <- read_csv("data/code_clan_info.csv")
+
+code_clan_tweets <- tweets %>% 
+  inner_join(info, by = "tweet_id") %>% 
+  select(tweet_id:status_url)
+
+head(code_clan_tweets)
+```
+
+**Question 7.**  
+From your new joined data, create a new tibble `codeclan_hashtags` containing only `tweet_id` and `hashtags`, then convert `hashtags` into lowercase for analysis. Keep only those tweets with hashtags.
+
+```{r}
+codeclan_hashtags <- code_clan_tweets %>% 
+  select(tweet_id, hashtags) %>% 
+  filter(!is.na(hashtags)) %>% 
+  mutate(hashtags = str_to_lower(hashtags))
+
+codeclan_hashtags
+```
+
+## Extensions
+
+**Question 8.**  
+Some tweets have more than one hashtag, denoted by the `c(` symbols at the start of the string. Use the `str_sub()` and `str_detect()` functions and your `codeclan_hashtags` tibble from above to find all the cases in which the hashtag string begins with characters`c(`.
+
+```{r}
+codeclan_hashtags %>% 
+  filter(str_detect(hashtags, "c\\("))
+```
+
+Here's a fun thing! let's get all the crap out of the column so we just have the words
+
+```{r}
+codeclan_hashtags %>% 
+  filter(str_detect(hashtags, "c\\(")) %>% 
+  mutate(hashtags = str_replace_all(hashtags, 
+                                    c("c\\(" = "",
+                                      "\\)" = "",
+                                      "\\," = "",
+                                      "\"" = "")))
+```
+
+
+**Question 9.**  
+Use the `str_detect()` function to find all tweets with `text` that mentions "Edinburgh", and count how many such tweets there are. 
+
+```{r}
+tweets %>% 
+  filter(str_detect(text, "(?i)Edinburgh")) %>% 
+  summarise(edinburgh_count = n())
+```
+
