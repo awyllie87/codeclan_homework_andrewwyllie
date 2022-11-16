@@ -1,0 +1,271 @@
+---
+title: "Programming in R Homework"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+    df_print: paged
+    css: ../../../styles.css
+  pdf_document: default
+---
+
+```{r}
+library(tidyverse)
+```
+
+
+# MVP
+
+<br> 
+
+**Question 1.** \
+Find the weather forecast for the next three days online. Create a list of lists in which each inner list should be labelled with the name of the day of the week. Each inner list should contain named elements telling you the temperature, chance of rain and wind speed.
+
+<br>
+
+**Question 2.** \
+Using the list you've just made find:
+
+  i. The chance of rain tomorrow
+  ii. The wind speed on the day after tomorrow
+  iii. The temperature tomorrow.
+
+<br>
+
+**Question 3.** \
+Find a 14 day forecast online and create a matrix of the forecasts for temperature, where each week is one row and columns correspond to days.
+
+You will want to give a name to the matrix you create.
+
+<br>
+
+**Question 4.** \
+From the matrix you just made select:
+
+  i. The third day of the second week
+  ii. The whole second week
+  iii. The first, third and fifth days in both weeks.
+
+
+<br>
+
+**Question 5.** \
+Write a function that pre-appends "The answer is: " to any character input, while for numeric input, it either just returns the number for numbers less than 10, or divides the number by 10 for numbers greater than 10. For anything else return "Invalid input".
+
+<br>
+
+**Question 6.** \
+Write a function which checks if two vectors have the same elements. 
+
+* If they have the same elements in the same order, return "Exactly the same"
+* If they have the same elements but in a different order, return "The same"
+* If they don't have the same elements, return "Different".
+
+
+<details>
+<summary>**Hints**</summary>
+* You can check if two vectors have the same elements but in a different order by using `sort` to sort each vector first and then checking if they are equal.
+* Have a look at the `all()` function
+</details>
+</blockquote>
+
+
+# Extension
+
+<br>
+
+**Question 7.** \
+Write code that prints a multiplication table for numbers up to 12. i.e. there will be 12 rows and 12 columns, and each element should be the row number multiplied by the column number.
+
+*From: https://adriann.github.io/programming_problems.html*
+
+<br>
+
+**Question 8.** \
+Write a function that takes a vector, and creates a text art histogram, like the one below.
+
+You may want to use the function `cat()`. This is similar to `print()`, but prints directly, without vector markers. You can also include newlines `"\n"` when using `cat()`.
+
+For example, the vector
+`c(1, 2, 3, 4, 5, 1, 3, 4, 5, 1, 3, 4, 4, 3, 3, 3, 3)`
+should produce the histogram below - the histogram dislpays the number of times each number appears in the vector.
+
+```
+1 | ***
+2 | *
+3 | *******
+4 | ****
+5 | **
+```
+# Answers
+
+## MVP
+
+### Question 1
+
+Find the weather forecast for the next three days online. Create a list of lists in which each inner list should be labelled with the name of the day of the week. Each inner list should contain named elements telling you the temperature, chance of rain and wind speed.
+
+```{r q1}
+weather <- list(
+                "Thursday" = list(temp = 8, rain_chance = 90, wind_speed = 16),
+                "Friday" = list(temp = 9, rain_chance = 89, wind_speed = 19),
+                "Saturday" = list(temp = 7, rain_chance = 83, wind_speed = 14)
+)
+```
+
+### Question 2
+
+Using the list you've just made find:
+
+  i. The chance of rain tomorrow
+  ii. The wind speed on the day after tomorrow
+  iii. The temperature tomorrow.
+
+```{r q2}
+print(paste0("Tomorrow's chance of rain is ",weather$Thursday$rain_chance,"%"))
+print(paste("Day-after-tomorrow's wind speed is expected to be",weather[[2]][3],"mph"))
+print(paste0("Tomorrow's temperature is expected to be around ",weather[[1]][1],"C"))
+```
+
+### Question 3
+
+Find a 14 day forecast online and create a matrix of the forecasts for temperature, where each week is one row and columns correspond to days.
+
+You will want to give a name to the matrix you create.
+
+```{r q3}
+fortnight_forecast <- c(9, 9, 7, 5, 6, 5, 7, 7, 6, 5, 6, 7, 7, 8)
+temp <- matrix(fortnight_forecast, nrow=2, ncol=7, byrow=TRUE)
+
+temp
+```
+
+### Question 4
+
+From the matrix you just made select:
+
+  i. The third day of the second week
+  ii. The whole second week
+  iii. The first, third and fifth days in both weeks.
+
+```{r q4}
+temp[2, 3]
+temp[2,]
+temp[,c(1,3,5)]
+```
+
+### Question 5
+
+Write a function that pre-appends "The answer is: " to any character input, while for numeric input, it either just returns the number for numbers less than 10, or divides the number by 10 for numbers greater than 10. For anything else return "Invalid input".
+
+```{r q5}
+add_answer <- function(x = NULL){
+  if(is_character(x)){
+    return(str_c("The answer is: ",x))
+  }
+  else if(is.numeric(x)){
+    if(x > 10){
+      return(x / 10)
+      }
+    else{
+      return(x)
+      }
+  }
+  return("Invalid input")
+  }
+
+
+add_answer("This right here!")
+add_answer(9)
+add_answer(11)
+add_answer(NA)
+```
+
+### Question 6
+
+Write a function which checks if two vectors have the same elements. 
+
+* If they have the same elements in the same order, return "Exactly the same"
+* If they have the same elements but in a different order, return "The same"
+* If they don't have the same elements, return "Different".
+
+```{r q6}
+test_v1 <- c(1,2,3,4,5)
+test_v2 <- c(5,4,3,2,1)
+test_v3 <- c(TRUE, TRUE, FALSE, FALSE, 4)
+
+v_compare <- function(x, y){
+  if(all(x==y)){
+    return("Exactly the same")
+  }
+  else{
+      x = sort(x)
+      y = sort(y)
+      if(all(x==y)){
+        return("The same")
+      }else{
+        return("Different")
+      }
+  }
+}
+
+v_compare(test_v1, test_v1)
+v_compare(test_v1, test_v2)
+v_compare(test_v1, test_v3)
+```
+
+## Extension
+
+### Question 7
+
+Write code that prints a multiplication table for numbers up to 12. i.e. there will be 12 rows and 12 columns, and each element should be the row number multiplied by the column number.
+
+```{r q7}
+q7_matrix <- matrix(replicate(12, 1), nrow=12, ncol=12)
+
+for (r_i in 1:dim(q7_matrix)[1]){
+  for(c_i in 1:dim(q7_matrix)[2]){
+    q7_matrix[r_i, c_i] = r_i * c_i
+  }
+}
+
+q7_matrix
+```
+
+### Question 8
+
+Write a function that takes a vector, and creates a text art histogram, like the one below.
+
+You may want to use the function `cat()`. This is similar to `print()`, but prints directly, without vector markers. You can also include newlines `"\n"` when using `cat()`.
+
+For example, the vector
+`c(1, 2, 3, 4, 5, 1, 3, 4, 5, 1, 3, 4, 4, 3, 3, 3, 3)`
+should produce the histogram below - the histogram displays the number of times each number appears in the vector.
+
+```
+1 | ***
+2 | *
+3 | *******
+4 | ****
+5 | **
+```
+
+```{r}
+q8_vector <- sample(0:9, size=50, replace=TRUE)
+
+## I don't QUITE understand how `aggregate` works. My understanding
+## is that it is taking q8_vector, grouping it by q8_vector (so the values),
+## and then reporting the length of the group, which comes out as the count
+
+q8_agg <- aggregate(q8_vector, list(num=q8_vector), length)
+q8_values <- as.vector(q8_agg[["num"]])
+q8_counts <- as.vector(q8_agg[["x"]])
+
+cat("```\n")
+for(i in seq_along(q8_values)){
+  cat(q8_values[i],"|",strrep("*",q8_counts[i]),"\n")
+}
+cat("```")
+```
+
