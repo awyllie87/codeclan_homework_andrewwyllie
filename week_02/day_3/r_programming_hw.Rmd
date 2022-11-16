@@ -256,7 +256,7 @@ q8_vector <- sample(0:9, size=50, replace=TRUE)
 
 ## I don't QUITE understand how `aggregate` works. My understanding
 ## is that it is taking q8_vector, grouping it by q8_vector (so the values),
-## and then reporting the length of the group, which comes out as the count
+## and then applying length() to the groups, which comes out as a count
 
 q8_agg <- aggregate(q8_vector, list(num=q8_vector), length)
 q8_values <- as.vector(q8_agg[["num"]])
