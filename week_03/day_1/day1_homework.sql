@@ -145,7 +145,8 @@ SELECT  CONCAT(first_name,' ',last_name,' - ',department,' (joined ', EXTRACT(YE
 FROM    employees
 WHERE   (first_name NOTNULL) AND
         (last_name NOTNULL) AND
-        (department NOTNULL);  
+        (department NOTNULL) AND 
+        (start_date NOTNULL);  
     
 -- Extension of extension
     
@@ -153,7 +154,8 @@ SELECT  CONCAT(first_name,' ',last_name,' - ',department,' (joined ', TO_CHAR(st
 FROM    employees
 WHERE   (first_name NOTNULL) AND
         (last_name NOTNULL) AND
-        (department NOTNULL);
+        (department NOTNULL) AND 
+        (start_date NOTNULL);
     
 /*Question 18.
 Return the first_name, last_name and salary of all employees together with a new column called salary_class 
