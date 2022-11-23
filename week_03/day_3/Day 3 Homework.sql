@@ -315,8 +315,11 @@ SELECT (CASE
             WHEN salary IS NULL
                 THEN 'none'
         END) AS salary_class,
-        count(*)
+        count(DISTINCT(e.id))
 FROM employees AS e
     INNER JOIN employees_committees AS ec 
         ON e.id = ec.employee_id
 GROUP BY salary_class
+
+SELECT *
+FROM employees_committees AS ec 
