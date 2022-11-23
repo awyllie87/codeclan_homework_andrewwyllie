@@ -187,7 +187,9 @@ HAVING count(*) > 1
 ORDER BY    count(*) DESC,
             first_name
             
-/*Find the proportion of employees in each department who are grade 1.*/
+/*Question 16. [Tough]
+ * 
+ * Find the proportion of employees in each department who are grade 1.*/
 
 WITH dep_total AS (
     SELECT  department, count(*) AS dept_total_employees
