@@ -1,0 +1,121 @@
+---
+title: "GGPlot Homework"
+output: html_notebook
+---
+
+```{r libraries}
+library(tidyverse)
+library(CodeClanData)
+```
+
+```{r data import}
+qb_revenue_breakdown <- qb_revenue_breakdown
+qb_monthly_sales <- qb_monthly_sales
+qb_competitors <- qb_competitors
+qb_device_data <- qb_device_data
+```
+
+# Part 1
+### Question 1
+
+Take the data in the dataset qb_revenue_breakdown and make a stacked bar chart showing the sources of revenue across the two years in the dataset.
+
+```{r}
+qb_revenue_breakdown %>% 
+  janitor::clean_names() %>% 
+  ggplot(aes(product, revenue, fill = year)) +
+  geom_bar(stat = "identity") +
+  labs(x = "\nProduct",
+       y = "Revenue\n",
+       fill = "Year",
+       title = "Revenue Sources 2018/19")
+```
+
+### Question 2
+
+Make a line chart showing monthly sales of the “flagship product” - the ‘KwikBit Unit 1’ - over the last year. This data is inside `qb_monthly_sales`, but you will need to use filter() or subset() (base R).
+
+```{r}
+qb_monthly_sales %>%
+  janitor::clean_names() %>% 
+  filter(cashflow == "Kwikbit Unit 1 Sales") %>%
+  ggplot(aes(date, amount)) +
+  geom_line() +
+  labs(x = "\nDate",
+       y = "Revenue\n",
+       title = "Monthly Kwikbit Unit 1 Sales") +
+  theme_light()
+```
+
+### Question 3
+
+Make a line chart showing monthly revenue and costs over the last year. This data is also in qb_monthly_sales.
+
+```{r}
+qb_monthly_sales %>%
+  janitor::clean_names() %>% 
+  filter(cashflow != "Kwikbit Unit 1 Sales",
+         date > "2018-12-31") %>% 
+  ggplot(aes(x = date, y = amount, colour = cashflow)) +
+  geom_line() +
+  labs(x = "\nMonth",
+       y = "Amount\n",
+       colour = "",
+       title = "Monthly Incoming and Outgoings") +
+  theme_light()
+```
+
+### Question 4
+
+Show annual sales of personal fitness trackers over the last 5 years broken down by company as a ribbon plot (use geom_area). This data is in qb_competitors.
+
+```{r}
+comp_max_min <- qb_competitors %>%
+  janitor::clean_names() %>% 
+  group_by(year) %>% 
+  summarise(min = min(revenue), max = max(revenue))
+
+comp_combined <- qb_competitors %>% 
+  janitor::clean_names() %>% 
+  inner_join(comp_max_min, by = "year")
+
+comp_combined %>% 
+  ggplot(aes(year)) +
+  geom_ribbon(aes(ymin = min, ymax = max)) +
+  geom_line(size = 1.3, aes(y = revenue, colour = company)) +
+  ggthemes::theme_stata()
+```
+
+### Question 5
+
+Now show the sales from the four competitors as a line graph. Include an extra layer that shows the data points used to make the lines.
+
+```{r}
+qb_competitors %>% 
+  janitor::clean_names() %>% 
+  ggplot(aes(year, revenue, colour = company)) +
+  geom_line() +
+  geom_point() +
+  ggthemes::theme_stata()
+```
+
+### Question 6
+
+Now the company wants to compare the number of steps that their device counts vs. their competitors. Make a line graph of the number of steps throughout time, and use faceting to compare between companies and people. The data for this is in qb_device_data.
+
+```{r}
+qb_device_data %>% 
+  janitor::clean_names() %>% 
+  mutate(time = (hours*60) + mins) %>% 
+  ggplot(aes(time, counts, colour = device)) +
+  geom_line() +
+  facet_grid(device ~ id) +
+  labs(y = "Steps",
+      x = "Time (mins)",
+      colour = "Device") +
+  ggthemes::theme_stata() +
+  theme(axis.text.y = element_text(angle = 0, size = 9),
+        strip.text = element_text(size = 10))
+```
+
+
