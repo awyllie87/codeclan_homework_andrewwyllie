@@ -5,6 +5,12 @@ library(bslib)
 
 lec_data <- read_csv("data/lec_data.csv")
 
+lec_data_teams <- lec_data %>% 
+  filter(is.na(player_name))
+
+lec_data_players <- lec_data %>% 
+  filter(!is.na(player_name))
+
 ### Functions
 
 get_roster <- function(x_team){
@@ -56,6 +62,47 @@ get_match_history <- function(x_team, match_data){
            winner = if_else(wins > losses, TRUE, FALSE))
 }
 
+### Variables
+
+no_players <- length(unique(na.omit(lec_data$player_name)))
+
+no_games <- length(unique(na.omit(lec_data$game_id)))
+
+no_teams <- length(unique(na.omit(lec_data$team_name)))
+
+total_champs <- length(unique(na.omit(lec_data$champion)))
+
+total_kills <- lec_data_teams %>% 
+  summarise(total_kills = sum(kills)) %>% 
+  pull()
+
+total_deaths <- lec_data_teams %>% 
+  summarise(total_deaths = sum(deaths)) %>% 
+  pull()
+
+top5_picks <- lec_data_players %>% 
+  select(champion) %>% 
+  group_by(champion) %>% 
+  summarise(times_picked = n()) %>% 
+  slice_max(times_picked, n = 5)
+
+most_picked <- top5_picks %>% 
+  slice_max(times_picked) %>% 
+  pull(var = champion)
+
+top5_bans <- lec_data %>% 
+  filter(is.na(player_name)) %>% 
+  select(ban_1:ban_5) %>%
+  pivot_longer(1:5, names_to = "ban_no", values_to = "champion") %>% 
+  group_by(champion) %>% 
+  summarise(times_banned = n()) %>% 
+  slice_max(times_banned, n = 5)
+
+most_banned <- top5_bans %>% 
+  slice_max(times_banned) %>% 
+  pull(var = champion)
+
+
 ### UI
 
 ui <- dashboardPage(
@@ -64,14 +111,25 @@ ui <- dashboardPage(
   
   dashboardSidebar(
     sidebarMenu(
-      menuItem("Dashboard", tabName = "dashboard", icon = icon("dashboard")),
-      menuItem("Team Data", tabName = "team_data", icon = icon("th"))
+      menuItem("Headlines", tabName = "headlines", icon = icon("dashboard")),
+      menuItem("Team Data", tabName = "team_data", icon = icon("th")),
+      menuItem("Player Analysis", tabName = "player_analysis", icon = icon("th"))
     )
   ),
   
   dashboardBody(
     tabItems(
-      tabItem(tabName = "dashboard"
+      tabItem(tabName = "headlines",
+              fluidRow(valueBoxOutput("dash_total_players"),
+                       valueBoxOutput("dash_total_teams"),
+                       valueBoxOutput("dash_total_games")),
+              
+              fluidRow(valueBoxOutput("dash_total_kills"),
+                       valueBoxOutput("dash_total_deaths")),
+              
+              fluidRow(valueBoxOutput("dash_total_champs"),
+                       valueBoxOutput("dash_most_picked"),
+                       valueBoxOutput("dash_most_banned"))
       ),
       
       tabItem(tabName = "team_data",
@@ -81,7 +139,7 @@ ui <- dashboardPage(
                          inputId = "team_select",
                          label = tags$b("Select Team"),
                          choices = sort(unique(lec_data$team_name)))
-                       ),
+                ),
                 
                 column(width = 3,
                        conditionalPanel(
@@ -91,7 +149,7 @@ ui <- dashboardPage(
                                       inputId = "split_select",
                                       label = tags$b("Split"),
                                       choices = c("Both", "Spring", "Summer")))
-                       ),
+                ),
                 
                 column(width = 4,
                        conditionalPanel(
@@ -101,21 +159,21 @@ ui <- dashboardPage(
                                       inputId = "playoff_select",
                                       label = tags$b("Playoffs"),
                                       choices = c("Both", "Yes", "No")))
-                       )
+                )
                 
               ),
               
               fluidRow(
                 tabBox(id = "team_tabs",
                        width = 12,
-                            tabPanel("Roster",
-                                     dataTableOutput("roster")),
-                            
-                            tabPanel("Game History",
-                                     dataTableOutput("game_history")),
-                            
-                            tabPanel("Match History",
-                                     dataTableOutput("match_history")))
+                       tabPanel("Roster",
+                                dataTableOutput("roster")),
+                       
+                       tabPanel("Game History",
+                                dataTableOutput("game_history")),
+                       
+                       tabPanel("Match History",
+                                dataTableOutput("match_history")))
               )
       )
     )
@@ -126,6 +184,30 @@ ui <- dashboardPage(
 
 # Define server logic required to return team data
 server <- function(input, output) {
+  
+  output$dash_total_players <- renderValueBox({
+    valueBox(no_players, "Players", color = "blue")})
+  
+  output$dash_total_teams <- renderValueBox({
+    valueBox(no_teams, "Teams", color = "navy")})
+  
+  output$dash_total_games <- renderValueBox({
+    valueBox(no_games, "Games", color = "olive")})
+  
+  output$dash_total_kills <- renderValueBox({
+    valueBox(total_kills, "Kills", color = "maroon")})
+  
+  output$dash_total_deaths <- renderValueBox({
+    valueBox(total_kills, "Deaths", color = "black")})
+  
+  output$dash_total_champs <- renderValueBox({
+    valueBox(total_champs, "Champions Picked", color = "orange")})
+  
+  output$dash_most_picked <- renderValueBox({
+    valueBox(paste(most_picked, collapse = " & "), "Most Picked", color = "black")})
+  
+  output$dash_most_banned <- renderValueBox({
+    valueBox(paste(most_banned, collapse = " & "), "Most Banned", color = "black")})
   
   output$roster <- renderDataTable(
     (get_roster(input$team_select)),
