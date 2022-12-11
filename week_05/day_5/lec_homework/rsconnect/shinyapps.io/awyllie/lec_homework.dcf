@@ -5,7 +5,10 @@ account: awyllie
 server: shinyapps.io
 hostUrl: https://api.shinyapps.io/v1
 appId: 7863377
-bundleId: 6620561
+bundleId: 6623594
 url: https://awyllie.shinyapps.io/lec_homework/
-when: 1670691815.23488
-lastSyncTime: 1670691815.23489
+when: 1670778951.70374
+lastSyncTime: 1670778951.70375
+asMultiple: FALSE
+asStatic: FALSE
+ignoredFiles: working.nb.html|working.Rmd

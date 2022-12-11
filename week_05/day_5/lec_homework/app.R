@@ -2,14 +2,23 @@ library(shiny)
 library(shinydashboard)
 library(tidyverse)
 library(bslib)
+library(plotly)
 
-lec_data <- read_csv("data/lec_data.csv")
+lec_data <- read_csv("data/lec_data.csv") %>% 
+  mutate(game_id = as.factor(game_id),
+         date = as.Date(date))
 
 lec_data_teams <- lec_data %>% 
-  filter(is.na(player_name))
+  filter(is.na(player_name)) %>% 
+  mutate(kda = ((kills + assists) / if_else(deaths == 0, 1, deaths))) %>% 
+  relocate(kda, .after = assists) %>% 
+  mutate(kda = round(kda, 2))
 
 lec_data_players <- lec_data %>% 
-  filter(!is.na(player_name))
+  filter(!is.na(player_name)) %>% 
+  mutate(kda = ((kills + assists) / if_else(deaths == 0, 1, deaths))) %>% 
+  relocate(kda, .after = assists) %>% 
+  mutate(kda = round(kda, 2))
 
 ### Functions
 
@@ -175,6 +184,36 @@ ui <- dashboardPage(
                        tabPanel("Match History",
                                 dataTableOutput("match_history")))
               )
+      ),
+      tabItem(tabName = "player_analysis",
+              fluidRow(
+                column(width = 2,
+                       radioButtons(inline = TRUE,
+                                    inputId = "player_split_select",
+                                    label = tags$b("Split"),
+                                    choices = c("Both", "Spring", "Summer")
+                       )),
+                
+                column(width =2,
+                       radioButtons(inline = TRUE,
+                                    inputId = "player_playoff_select",
+                                    label = tags$b("Playoffs"),
+                                    choices = c("Both", "Yes", "No"))
+                       ),
+                
+                column(width = 2,
+                       selectInput(inputId = "player_role_select",
+                                   label = tags$b("Position"),
+                                   choices = c("All", "Top", "Mid", "ADC", "Support", "Jungle"))
+                ),
+                
+                column(width = 2,
+                       selectInput(inputId = "player_metric_select",
+                                   label = tags$b("Metric"),
+                                   choices = c("Kills", "Deaths", "Assists", "KDA", "Total CS", "Minion Kills", "Monster Kills"))
+                )),
+              
+              fluidRow(plotlyOutput("player_graph", height = 700))
       )
     )
   )
@@ -184,6 +223,8 @@ ui <- dashboardPage(
 
 # Define server logic required to return team data
 server <- function(input, output) {
+  
+  ### Headline Dashboard
   
   output$dash_total_players <- renderValueBox({
     valueBox(no_players, "Players", color = "blue")})
@@ -208,6 +249,8 @@ server <- function(input, output) {
   
   output$dash_most_banned <- renderValueBox({
     valueBox(paste(most_banned, collapse = " & "), "Most Banned", color = "black")})
+  
+  ### Team Data
   
   output$roster <- renderDataTable(
     (get_roster(input$team_select)),
@@ -253,6 +296,45 @@ server <- function(input, output) {
                    columnDefs = list(list(targets = "_all", searchable = FALSE))
     )
   )
+  
+  output$player_graph <- renderPlotly({
+    
+    ggplotly(lec_data_players %>% 
+      filter(
+        split == case_when(
+          input$player_split_select == "Spring" ~ "Spring",
+          input$player_split_select == "Summer" ~ "Summer",
+          TRUE ~ split),
+        position ==
+          case_when(
+            input$player_role_select == "Top" ~ "top",
+            input$player_role_select == "Mid" ~ "mid",
+            input$player_role_select == "ADC" ~ "bot",
+            input$player_role_select == "Support" ~ "sup",
+            input$player_role_select == "Jungle" ~ "jng",
+            TRUE ~ position),
+        playoffs ==
+          case_when(
+            input$player_playoff_select == "Yes" ~ TRUE,
+            input$player_playoff_select == "No" ~ FALSE,
+            TRUE ~ playoffs)) %>% 
+      ggplot() +
+      geom_line(aes_string(x = "date",
+                    y = (metric = case_when(
+                      input$player_metric_select == "Kills" ~ "kills",
+                      input$player_metric_select == "Deaths" ~ "deaths",
+                      input$player_metric_select == "Assists" ~ "assists",
+                      input$player_metric_select == "KDA" ~ "kda",
+                      input$player_metric_select == "Total CS" ~ "total_cs",
+                      input$player_metric_select == "Minion Kills" ~ "minion_kills",
+                      input$player_metric_select == "Monster Kills" ~ "monster_kills",
+                      TRUE ~ "kills")), 
+                #    group = "player_name", 
+                    colour = "player_name")) +
+      scale_x_date(date_breaks = "1 week",
+                   date_labels = "%d %B") +
+      theme(legend.position = "bottom"))
+  })
 }
 
 # Run the application 
