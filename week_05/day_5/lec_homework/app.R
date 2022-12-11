@@ -1,24 +1,33 @@
+### TODO: 
+### - Enable reactivity on the server
+### - split app.R into constituent components i.e server.R, ui.R, global.R
+### - More of everything. This is fun!
+
 library(shiny)
 library(shinydashboard)
 library(tidyverse)
 library(bslib)
 library(plotly)
 
+# Establish data tables
+
 lec_data <- read_csv("data/lec_data.csv") %>% 
   mutate(game_id = as.factor(game_id),
-         date = as.Date(date))
+         date = as.Date(date),
+         # kda needs to account for deaths being 0 to prevent infinity.
+         # sadly prevents deathless games from being special... perhaps mutate in a column to flag them?
+         kda = ((kills + assists) / if_else(deaths == 0, 1, deaths))) %>% 
+  relocate(kda, .after = assists) %>% 
+  mutate(kda = round(kda, 2))
+
+# create sub-tables for teams and players to reduce the need for repeated filtering
+# (the aggregate rows for team stats have NA for player name, making them identifiable)
 
 lec_data_teams <- lec_data %>% 
-  filter(is.na(player_name)) %>% 
-  mutate(kda = ((kills + assists) / if_else(deaths == 0, 1, deaths))) %>% 
-  relocate(kda, .after = assists) %>% 
-  mutate(kda = round(kda, 2))
+  filter(is.na(player_name))
 
 lec_data_players <- lec_data %>% 
-  filter(!is.na(player_name)) %>% 
-  mutate(kda = ((kills + assists) / if_else(deaths == 0, 1, deaths))) %>% 
-  relocate(kda, .after = assists) %>% 
-  mutate(kda = round(kda, 2))
+  filter(!is.na(player_name))
 
 ### Functions
 
@@ -129,6 +138,12 @@ ui <- dashboardPage(
   dashboardBody(
     tabItems(
       tabItem(tabName = "headlines",
+              
+              ### Produce value boxes with a breakdown of basic highlights of the whole dataset.
+              ### Deaths probably isn't necessary.
+              ### 
+              ### I want to do more with this -- Dynamic icons depending on champions named, perhaps.
+              
               fluidRow(valueBoxOutput("dash_total_players"),
                        valueBoxOutput("dash_total_teams"),
                        valueBoxOutput("dash_total_games")),
@@ -142,6 +157,12 @@ ui <- dashboardPage(
       ),
       
       tabItem(tabName = "team_data",
+              
+              ### Break down the team data in various modes of interest.
+              ### A full version would be MUCH shinier than this instead of just producing data tables
+              ### -- Quick dynamic match breakdowns based on table data, logos, icons, etc.
+              ### This will have to do for now!
+              
               fluidRow(
                 column(width = 2,
                        selectInput(
@@ -149,6 +170,12 @@ ui <- dashboardPage(
                          label = tags$b("Select Team"),
                          choices = sort(unique(lec_data$team_name)))
                 ),
+                
+                
+                ### I used conditionalPanel() here to hide inputs when they don't do anything. Filtering
+                ### the roster by Split or Playoffs doesn't adjust the result, so hide the options.
+                ### With a little work I can probably make Split do something -- roster for some teams
+                ### changes over the course of a season, and identifying when the changes happen is useful data
                 
                 column(width = 3,
                        conditionalPanel(
@@ -186,6 +213,28 @@ ui <- dashboardPage(
               )
       ),
       tabItem(tabName = "player_analysis",
+              
+              ### First run at dynamic plotting.
+              ### The plots are EXTREMELY crowded with everything populated, so
+              ### produced a bunch of filters to clean it up.
+              ###
+              ### Converted the ggplot() to a plotly() graph to allow cooler interactivity,
+              ### but I haven't learned plotly syntax to do much adjustment yet.
+              ###
+              ### The metrics I expose for viewing are all useful pieces of data
+              ### and there's a ton more I could and probably will expose with more work
+              ###
+              ### Biggest issue I'm confronting now is making it useful! I'm bad at graphs!!
+              ###
+              ### Second biggest issue -- sometimes multiple games occur on the same day.
+              ### I need to figure out a way to show this and also have it readable.
+              ### In the version I've settled on right now, they all just appear as one X coordinate,
+              ### which is obviously not good.
+              ### Returning the column to being datetime instead helps, but they're still crammed
+              ### together since the time spans in question are weeks and months.
+              ### Using the individual games as a factor makes sense, but making this present data correctly
+              ### was proving a lot of trouble for a weekend homework.
+              
               fluidRow(
                 column(width = 2,
                        radioButtons(inline = TRUE,
@@ -199,7 +248,7 @@ ui <- dashboardPage(
                                     inputId = "player_playoff_select",
                                     label = tags$b("Playoffs"),
                                     choices = c("Both", "Yes", "No"))
-                       ),
+                ),
                 
                 column(width = 2,
                        selectInput(inputId = "player_role_select",
@@ -221,7 +270,7 @@ ui <- dashboardPage(
 
 ### Server
 
-# Define server logic required to return team data
+# Define server logic required to return data
 server <- function(input, output) {
   
   ### Headline Dashboard
@@ -297,43 +346,45 @@ server <- function(input, output) {
     )
   )
   
+  ### Player Analysis
+  
   output$player_graph <- renderPlotly({
     
     ggplotly(lec_data_players %>% 
-      filter(
-        split == case_when(
-          input$player_split_select == "Spring" ~ "Spring",
-          input$player_split_select == "Summer" ~ "Summer",
-          TRUE ~ split),
-        position ==
-          case_when(
-            input$player_role_select == "Top" ~ "top",
-            input$player_role_select == "Mid" ~ "mid",
-            input$player_role_select == "ADC" ~ "bot",
-            input$player_role_select == "Support" ~ "sup",
-            input$player_role_select == "Jungle" ~ "jng",
-            TRUE ~ position),
-        playoffs ==
-          case_when(
-            input$player_playoff_select == "Yes" ~ TRUE,
-            input$player_playoff_select == "No" ~ FALSE,
-            TRUE ~ playoffs)) %>% 
-      ggplot() +
-      geom_line(aes_string(x = "date",
-                    y = (metric = case_when(
-                      input$player_metric_select == "Kills" ~ "kills",
-                      input$player_metric_select == "Deaths" ~ "deaths",
-                      input$player_metric_select == "Assists" ~ "assists",
-                      input$player_metric_select == "KDA" ~ "kda",
-                      input$player_metric_select == "Total CS" ~ "total_cs",
-                      input$player_metric_select == "Minion Kills" ~ "minion_kills",
-                      input$player_metric_select == "Monster Kills" ~ "monster_kills",
-                      TRUE ~ "kills")), 
-                #    group = "player_name", 
-                    colour = "player_name")) +
-      scale_x_date(date_breaks = "1 week",
-                   date_labels = "%d %B") +
-      theme(legend.position = "bottom"))
+               filter(
+                 split == case_when(
+                   input$player_split_select == "Spring" ~ "Spring",
+                   input$player_split_select == "Summer" ~ "Summer",
+                   TRUE ~ split),
+                 position ==
+                   case_when(
+                     input$player_role_select == "Top" ~ "top",
+                     input$player_role_select == "Mid" ~ "mid",
+                     input$player_role_select == "ADC" ~ "bot",
+                     input$player_role_select == "Support" ~ "sup",
+                     input$player_role_select == "Jungle" ~ "jng",
+                     TRUE ~ position),
+                 playoffs ==
+                   case_when(
+                     input$player_playoff_select == "Yes" ~ TRUE,
+                     input$player_playoff_select == "No" ~ FALSE,
+                     TRUE ~ playoffs)) %>% 
+               ggplot() +
+               geom_line(aes_string(x = "date",
+                                    y = (metric = case_when(
+                                      input$player_metric_select == "Kills" ~ "kills",
+                                      input$player_metric_select == "Deaths" ~ "deaths",
+                                      input$player_metric_select == "Assists" ~ "assists",
+                                      input$player_metric_select == "KDA" ~ "kda",
+                                      input$player_metric_select == "Total CS" ~ "total_cs",
+                                      input$player_metric_select == "Minion Kills" ~ "minion_kills",
+                                      input$player_metric_select == "Monster Kills" ~ "monster_kills",
+                                      TRUE ~ "kills")), 
+                                    #    group = "player_name", 
+                                    colour = "player_name")) +
+               scale_x_date(date_breaks = "1 week",
+                            date_labels = "%d %B") +
+               theme(legend.position = "bottom"))
   })
 }
 
