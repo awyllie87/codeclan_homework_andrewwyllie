@@ -1,0 +1,214 @@
+---
+title: "Week 6 Day 1 Homework"
+output: html_notebook
+---
+
+```{r}
+library(gtools)
+library(tidyverse)
+source("prob.R")
+boat <- read_csv("data/titanic.csv")
+```
+```{r}
+boat <- boat %>% 
+  mutate(type = case_when(
+    class %in% c("3rd", "2nd", "1st") ~ "Passenger",
+    TRUE ~ "Crew"
+  ))
+
+boat_crew <- boat %>% 
+  filter(type == "Crew")
+
+boat_passengers <- boat %>% 
+  filter(type == "Passenger")
+```
+
+# Titanic
+
+```{r}
+boat %>% 
+  filter(survived == "yes") %>% 
+  summarise(prob_all = n() / nrow(boat))
+
+boat_crew %>% 
+  filter(survived == "yes") %>% 
+  summarise(prob_crew = n() / nrow(boat_crew))
+
+boat_passengers %>% 
+  filter(survived == "yes") %>% 
+  summarise(prob_passengers = n() / nrow(boat_passengers))
+```
+
+23.7% of crew survived, 37.965% of passengers survived. Seems fairly definitive to me!
+
+### Ignore this. I wanted to mess around with exploring across populations!
+
+```{r}
+boat_passengers_women <- boat_passengers %>% 
+  filter(gender == "female")
+
+boat_passengers_men <- boat_passengers %>% 
+  filter(gender == "male")
+
+boat_passengers_1st <- boat_passengers %>% 
+  filter(class == "1st")
+
+boat_passengers_2nd <- boat_passengers %>% 
+  filter(class == "2nd")
+
+boat_passengers_3rd <- boat_passengers %>% 
+  filter(class == "3rd")
+
+boat_passengers_1st_men <- boat_passengers %>% 
+  filter(class == "1st",
+         gender == "male")
+
+boat_passengers_1st_women <- boat_passengers %>% 
+  filter(class == "1st",
+         gender == "female")
+
+boat_passengers_2nd_men <- boat_passengers %>% 
+  filter(class == "2nd",
+         gender == "male")
+
+boat_passengers_2nd_women <- boat_passengers %>% 
+  filter(class == "2nd",
+         gender == "female")
+
+boat_passengers_3rd_men <- boat_passengers %>% 
+  filter(class == "3rd",
+         gender == "male")
+
+boat_passengers_3rd_women <- boat_passengers %>% 
+  filter(class == "3rd",
+         gender == "female")
+
+f_ <- boat_passengers_1st %>% 
+  filter(survived == "yes") %>% 
+  summarise(prob = round(n() / nrow(boat_passengers_1st), 3))
+
+f_m <- boat_passengers_1st_men %>% 
+  filter(survived == "yes") %>% 
+  summarise(prob_men = round(n() / nrow(boat_passengers_1st_men), 3))
+
+f_w <- boat_passengers_1st_women %>% 
+  filter(survived == "yes") %>% 
+  summarise(prob_women = round(n() / nrow(boat_passengers_1st_women), 3))
+
+s_ <- boat_passengers_2nd %>% 
+  filter(survived == "yes") %>% 
+  summarise(prob = round(n() / nrow(boat_passengers_2nd), 3))
+
+s_m <- boat_passengers_2nd_men %>% 
+  filter(survived == "yes") %>% 
+  summarise(prob_men = round(n() / nrow(boat_passengers_2nd_men), 3))
+
+s_w <- boat_passengers_2nd_women %>% 
+  filter(survived == "yes") %>% 
+  summarise(prob_women = round(n() / nrow(boat_passengers_2nd_women), 3))
+
+t_ <- boat_passengers_3rd %>% 
+  filter(survived == "yes") %>% 
+  summarise(prob = round(n() / nrow(boat_passengers_3rd), 3))
+
+t_m <- boat_passengers_3rd_men %>% 
+  filter(survived == "yes") %>% 
+  summarise(prob_men = round(n() / nrow(boat_passengers_3rd_men), 3))
+
+t_w <- boat_passengers_3rd_women %>% 
+  filter(survived == "yes") %>% 
+  summarise(prob_women = round(n() / nrow(boat_passengers_3rd_women), 3))
+
+m_ <- boat_passengers_men %>% 
+  filter(survived == "yes") %>% 
+  summarise(prob_men = round(n() / nrow(boat_passengers_men), 3))
+
+w_ <- boat_passengers_women %>% 
+  filter(survived == "yes") %>% 
+  summarise(prob_women = round(n() / nrow(boat_passengers_women), 3))
+
+first_class <- cbind(f_, f_m, f_w)
+second_class <- cbind(s_, s_m, s_w)
+third_class <- cbind(t_, t_m, t_w)
+
+all_classes <- rbind(first_class,
+                     second_class,
+                     third_class)
+
+all_classes
+```
+
+# Consolidation
+
+## Question 1.
+If I roll a six-sided dice once, what is the probability of getting a number less than 5?
+
+```{r}
+s_die <- rolldie(1)
+
+s_die %>% 
+  filter(X1 < 5) %>% 
+  summarise(prob = n() / nrow(s_die))
+```
+
+2 / 3
+
+## Question 4.
+Five chairs are placed in a row in a room, along with five people of differing height. The people sit down randomly on the chairs. What is the probability that they sit in order of decreasing height, left to right?
+
+```{r}
+people <- c("Height1", "Height2", "Height3", "Height4", "Height5")
+```
+
+```{r}
+chairs <- as_tibble(permutations(n = 5, 
+                                 r = 5, 
+                                 v = people, 
+                                 repeats.allowed = FALSE))
+
+nrow(chairs)
+```
+
+1 / 120
+
+## Question 5.
+I roll six dice:
+
+what is the probability I see the numbers 6, 5, 4, 3, 2 and 1 in order on the dice, left to right?
+what is the probability I see one each of the numbers 6, 5, 4, 3, 2 and 1 on the dice regardless of order?
+
+```{r}
+s_die_six <- as_tibble(permutations(n = 6,
+                                    r = 6,
+                                    v = 1:6,
+                                    repeats.allowed = TRUE))
+
+s_die_six_unordered <- as_tibble(permutations(n = 6,
+                                              r = 6,
+                                              v = 1:6,
+                                              repeats.allowed = FALSE))
+
+nrow(s_die_six)
+
+nrow(s_die_six_unordered) / nrow(s_die_six)
+```
+1 / 46,656 of 6:1
+
+720 / 46,656 of any permutation of 1:6. Around about 1.54%
+
+## Question 6.
+If I draw a single card from a 52-card deck, and it is black, what is the probability that its suit is spades?
+
+```{r}
+deck <- cards(jokers = FALSE)
+
+deck_black <- deck %>% 
+  filter(suit %in% c("Club", "Spade"))
+
+deck_spade <- deck %>% 
+  filter(suit == "Spade")
+
+nrow(deck_spade) / nrow(deck_black)
+```
+
+50:50
