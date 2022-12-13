@@ -1,0 +1,109 @@
+---
+title: "W6 D2 Homework"
+output: html_notebook
+---
+
+```{r}
+library(tidyverse)
+library(janitor)
+```
+
+```{r}
+reviews <- read_csv("data/20190928-items.csv") %>% 
+  clean_names()
+```
+
+## Question 2.
+>Find the brand with the highest numbers of phones in the dataset.
+
+```{r}
+reviews %>% 
+  ggplot(aes(x = brand)) +
+  geom_bar()
+
+reviews %>% 
+  group_by(brand) %>% 
+  summarise(total_phones = n())
+```
+
+Samsung has the most phones
+
+## Question 3.
+>For your top brand, plot the distribution of phone ratings as a probability density, overlaying a fitted normal distribution. Do you think the normal distribution provides a good model of these ratings?
+
+```{r}
+samsung_reviews <- reviews %>% 
+  filter(brand == "Samsung")
+
+samsung_unique_reviews <- reviews %>% 
+  filter(brand == "Samsung") %>% 
+  group_by(rating) %>% 
+  summarise(count = n()) %>% 
+  mutate(prob = count / nrow(samsung_reviews))
+
+samsung_stats <- samsung_reviews %>% 
+  summarise(
+    num = n(),
+    mean = mean(rating),
+    sd = sd(rating)
+  )
+
+samsung_reviews %>% 
+  ggplot(aes(x = rating)) +
+  geom_histogram(aes(y = after_stat(density)),
+                 col = "white",
+                 bins = nrow(samsung_unique_reviews)) +
+  scale_x_continuous(breaks = seq(0, 5, 0.5)) +
+  stat_function(fun = dnorm,
+                args = list(
+                  mean = samsung_stats$mean,
+                  sd = samsung_stats$sd
+                ),
+                col = "red")
+```
+
+No, a normal distribution isn't a good model for these ratings. The density doesn't decrease uniformly from the mean.
+
+## Question 4 
+>We can be more quantitative in comparing the distribution of top brand ratings with a normal distribution. You calculated the mean() and sd() of your distribution in an earlier question. Use these values to calculate the proportions of ratings within one-, two- and three standard deviations of the mean. Compare these proportions with those you expect for a normal distribution.
+
+```{r}
+samsung_scaled <- reviews %>% 
+  filter(brand == "Samsung") %>% 
+  mutate(z_rating = scale(rating)) %>% 
+  group_by(rating) %>% 
+  summarise(count = n(), z_rating) %>% 
+  mutate(prob = count / nrow(samsung_reviews)) %>% 
+  distinct()
+
+samsung_1_sd <- samsung_scaled %>% 
+  filter(between(z_rating, left = -1, right = 1))
+
+samsung_2_sd <- samsung_scaled %>% 
+  filter(between(z_rating, left = -2, right = 2))
+
+samsung_3_sd <- samsung_scaled %>% 
+  filter(between(z_rating, left = -3, right = 3))
+
+prop_sd1 <- 100 * (nrow(samsung_1_sd) / nrow(samsung_scaled))
+prop_sd2 <- 100 * (nrow(samsung_2_sd) / nrow(samsung_scaled))
+prop_sd3 <- 100 * (nrow(samsung_3_sd) / nrow(samsung_scaled))
+
+normal_sd <- c(100 * (pnorm(q = 1) - pnorm(q = -1)),
+               100 * (pnorm(q = 2) - pnorm(q = -2)),
+               100 * (pnorm(q = 3) - pnorm(q = -3)))
+
+tibble(
+  samsung = round(c(prop_sd1,prop_sd2,prop_sd3),2),
+  normal = round(normal_sd, 2)
+)
+```
+
+```{r}
+qqnorm(samsung_reviews$rating)
+qqline(samsung_reviews$rating, col = "red")
+```
+
+Comparing our data to a normal distribution, if our distribution was a straight line (followed the red line), then it would be a normal distribution. Because it doesn't, it isn't.
+
+
