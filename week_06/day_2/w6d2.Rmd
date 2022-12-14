@@ -73,8 +73,7 @@ samsung_scaled <- reviews %>%
   mutate(z_rating = scale(rating)) %>% 
   group_by(rating) %>% 
   summarise(count = n(), z_rating) %>% 
-  mutate(prob = count / nrow(samsung_reviews)) %>% 
-  distinct()
+  mutate(prob = count / nrow(samsung_reviews))
 
 samsung_1_sd <- samsung_scaled %>% 
   filter(between(z_rating, left = -1, right = 1))
