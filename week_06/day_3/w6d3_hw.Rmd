@@ -1,0 +1,137 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+library(tidyverse)
+library(janitor)
+library(infer)
+library(fastGraph)
+
+houses <- read_csv("data/ames.csv") %>% 
+  clean_names()
+```
+
+# Task 2
+
+>Investigate the distribution of lot_area. Is the distribution roughly normal? If not, what problems do you find?
+
+```{r}
+houses %>% 
+  ggplot(aes(x = lot_area)) +
+  geom_histogram()
+
+houses %>% 
+  summarise(min = min(lot_area),
+            max = max(lot_area))
+
+houses %>% 
+  filter(lot_area < 30000) %>% 
+  ggplot(aes(x = lot_area)) +
+  geom_histogram() +
+  labs(title = "< 30,000")
+
+houses %>% 
+  filter(lot_area > 30000) %>% 
+  ggplot(aes(x = lot_area)) +
+  geom_histogram() +
+  labs(title = "> 30,000")
+```
+
+> Most of the lots are clustered under 30,000, but there is some extreme outliers, maxing out at 215,245
+
+# Task 3
+
+```{r}
+area_bootstrap <- houses %>% 
+  specify(response = lot_area) %>% 
+  generate(reps = 1000, type = "bootstrap") %>% 
+  calculate(stat = "mean")
+
+area_bootstrap %>% 
+  ggplot(aes(x = stat)) +
+  geom_histogram(colour = "white")
+```
+
+# Task 4
+
+```{r}
+area_95_ci <- area_bootstrap %>% 
+  get_ci(level = 0.95, type = "percentile")
+
+area_bootstrap %>% 
+  ggplot(aes(x = stat)) +
+  geom_histogram(col = "white") +
+  geom_segment(x = area_95_ci$lower_ci, xend = area_95_ci$upper_ci,
+               y = 0, yend = 0, colour = "red", size = 2, lineend = "square") +
+  geom_vline(x = mean(houses$lot_area), xintercept = mean(houses$lot_area),
+             colour = "red") 
+```
+
+# Task 5
+>You would like to know the mean(lot_area) of the sold houses with higher confidence. Calculate the 99% CI for this variable. Is it narrower or broader than the 95% CI? Does that make sense?
+
+```{r}
+area_99_ci <- area_bootstrap %>% 
+  get_ci(level = 0.99, type = "percentile")
+
+area_bootstrap %>% 
+  ggplot(aes(x = stat)) +
+  geom_histogram(col = "white") +
+  geom_segment(x = area_99_ci$lower_ci, xend = area_99_ci$upper_ci,
+               y = 0, yend = 0, colour = "blue", size = 2, lineend = "square") +
+  geom_segment(x = area_95_ci$lower_ci, xend = area_95_ci$upper_ci,
+               y = 0, yend = 0, colour = "red", size = 2, lineend = "square") +
+  geom_vline(xintercept = mean(houses$lot_area),
+             colour = "red") 
+
+area_bootstrap %>% 
+  visualise(bins = 30) +
+  shade_ci(endpoints = area_95_ci,fill = "red",  color = "red") +
+  shade_ci(endpoints = area_99_ci)
+```
+
+>The CI is broader at 99% CI. This makes sense, as to be more confident with the same data, you need to allow more values to be possible.
+
+# Task 6
+> Calculate the point estimate of the mean(lot_area)
+
+```{r}
+tibble(bootstrap_area_mean = mean(area_bootstrap$stat),
+       sample_area_mean = mean(houses$lot_area))
+```
+
+# Extension
+
+>Calculate a point estimate and 95% CI for the proportion of houses in the data built before 1920. Does the number of reps you use matter? [Investigate reps from 200 up to 50000, memory of your laptop permitting].
+
+```{r}
+bootstraps <- c(200, 1000, 5000, 25000, 50000)
+results <- tibble()
+for(i in 1:5){
+  
+  pre_1920_bootstrap <- houses %>% 
+  group_by(year_built) %>%  
+  mutate(pre_1920 = if_else(year_built < 1920, "Yes", "No")) %>% 
+  ungroup() %>% 
+  specify(response = pre_1920, success = "Yes") %>% 
+  generate(reps = bootstraps[i], type = "bootstrap") %>% 
+  calculate(stat = "prop")
+  
+  pre_1920_95_ci <- pre_1920_bootstrap %>% 
+  get_ci(level = 0.95, type = "percentile") %>% 
+    mutate(reps = bootstraps[i],
+           mean = mean(pre_1920_bootstrap$stat))
+  
+  results <- results %>% 
+    bind_rows(pre_1920_95_ci)
+}
+
+results %>% 
+  select(3:4,1:2)
+```
+
+> The mean proportion gets very slightly smaller as you perform more reps, but it's extremely negligible
+
+
