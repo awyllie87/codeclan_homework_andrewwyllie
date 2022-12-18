@@ -1,0 +1,241 @@
+---
+title: "Hypothesis Tests & Probability Homework"
+output: html_notebook
+---
+
+# MVP
+
+## Practical
+
+```{r}
+library(tidyverse)
+library(infer)
+data(msleep)
+```
+
+
+### Question 1
+
+>Explore the dataset and familiarise yourself with it.
+
+```{r}
+skimr::skim(msleep)
+```
+
+### Question 2
+
+>Jabberwockies sleep for around 7 hours a night, on average. Perform an appropriate statistical test to determine whether the mean `sleep_total` in the sampled population of animal types differs from the typical value for jabberwockies.
+
+#### Hypothesis and Alpha
+
+H0: mean_sleep - 7 = 0
+HA: mean_sleep - 7 != 0
+
+alpha = 0.05
+
+#### Observed statistic
+
+```{r}
+observed_stat <-  msleep %>% 
+  summarise(mean_sleep = mean(sleep_total))
+```
+
+#### Null distribution
+
+```{r}
+null_distribution <- msleep %>% 
+  specify(response = sleep_total) %>% 
+  hypothesise(null = "point", mu = 7) %>% 
+  generate(reps = 5000, type = "bootstrap") %>% 
+  calculate(stat = "mean")
+```
+
+#### Visualise
+
+```{r}
+null_distribution %>% 
+  visualise(bins = 25) +
+  shade_p_value(obs_stat = observed_stat,
+                direction = "both")
+```
+
+#### Calculate P-value
+
+```{r}
+null_distribution %>% 
+  get_p_value(obs_stat = observed_stat,
+              direction = "both")
+```
+
+#### Conclusion
+
+p-value approaches zero, therefore we must reject the null hypothesis that the animals sleep the same number of hours as jabberwockies, and it is instead likely that the average sleep time of other animals differs from that of jabberwockies.
+
+
+### Question 3
+
+> Perform an appropriate statistical test to determine whether omnivores sleep for significantly longer than herbivores, on average.
+
+#### Hypothesis and alpha
+
+H0: mean_sleep_omnivores - mean_sleep_herbivores <= 0
+HA: mean_sleep_omnivores - mean_sleep_herbivores > 0
+
+alpha = 0.05
+
+#### Observed statistic
+
+```{r}
+observed_stat <- msleep %>% 
+  filter(vore == "omni" | vore == "herbi") %>% 
+  group_by(vore) %>% 
+  summarise(mean_sleep = mean(sleep_total)) %>% 
+  pivot_wider(names_from = vore,
+              values_from = mean_sleep) %>% 
+  mutate(sleep_diff = omni - herbi)
+```
+
+#### Null distribution
+
+```{r}
+null_distribution <- msleep %>% 
+  filter(vore == "omni" | vore == "herbi") %>% 
+  specify(sleep_total ~ vore) %>% 
+  hypothesise(null = "independence") %>% 
+  generate(reps = 5000, type = "permute") %>% 
+  calculate(stat = "diff in means", order = c("omni", "herbi"))
+```
+
+#### Visualise
+
+```{r}
+null_distribution %>% 
+  visualise(bins = 25) +
+  shade_p_value(obs_stat = observed_stat$sleep_diff,
+                direction = "greater")
+```
+
+#### Calculate P-value
+
+```{r}
+null_distribution %>% 
+  get_p_value(obs_stat = observed_stat$sleep_diff,
+            direction = "greater")
+```
+
+#### Conclusion
+
+Since 0.12 !< 0.05, we can not reject our null hypothesis: it is not likely that omnivores on average sleep significantly longer than herbivores.
+
+### Question 4
+
+> Perform an appropriate statistical test to determine whether the proportion of domesticated animal types in the population of animal types is greater than 5%.
+
+```{r}
+msleep_tidy <- msleep %>% 
+  drop_na(conservation) %>% 
+  mutate(is_domesticated = conservation == "domesticated")
+```
+
+#### Hypothesis and Alpha
+
+H0: prop_domesticated <= 0.05
+HA: prop_domesticated > 0.05
+
+#### Observed statistic
+
+```{r}
+observed_stat <- msleep_tidy %>% 
+  group_by(conservation) %>% 
+  summarise(prop = n() / nrow(msleep_tidy)) %>% 
+  filter(conservation == "domesticated")
+```
+
+#### Null distribution
+
+```{r}
+null_distribution <- msleep_tidy %>% 
+  specify(response = is_domesticated, success = "TRUE") %>% 
+  hypothesise(null = "point", p = 0.05) %>% 
+  generate(reps = 2000, type = "draw") %>% 
+  calculate(stat = "prop")
+```
+
+#### Visualise
+
+```{r}
+null_distribution %>% 
+  visualise(bins = 10) +
+  shade_p_value(obs_stat = observed_stat$prop,
+                direction = "greater")
+```
+
+#### Calculate P-value
+
+```{r}
+null_distribution %>% 
+  get_p_value(obs_stat = observed_stat$prop,
+              direction = "greater")
+```
+
+#### Conclusion
+
+0.001 < 0.05, therefore it is likely the proportion of domesticated animals in the population of animal types is greater than 5%.
+
+## Defining the Hypothesis
+
+### Question 1
+
+> You work for a independent coffee shop. The boss tells you that she thinks that around 40% of people in the town (population 30,000) know of the coffee shop, but you are skeptical of the estimate and think that the actual percentage is higher. You conduct a random survey of 200 people in the town, asking if respondents are aware of your coffee shop. You want to use the sample to test the hypothesis that more than 40% of the town’s population have heard of the coffee shop.
+
+#### Answer
+
+- H0: proportion of people that have heard of the coffee shop <= 0.4
+- HA: proportion of people that have heard of the coffee shop > 0.4
+- alpha: 0.05
+
+### Question 2
+
+> You work for a website design company and have performed an A/B test on the position of a banner on a website promoting a particular item. You selected five days at random last month and then randomly selected 200 of each sampled day’s users into group A and another 200 of that day’s users into group B. Group A continued to be shown the banner at the right hand side of the webpage (its usual position) while group B was shown the banner at the top of the page. You monitored each sampled user’s interactions with the website, in particular the ‘click through rate’ (CTR) on the banner, i.e. what proportion of sampled users clicked on the banner. You want to use the sampled data to test the hypothesis that website users overall are more likely to click on the banner if positioned at the top of the page
+
+#### Answer
+
+- H0: prop(Group B clicks) <= prop(Group A clicks)
+- H1: prop(Group B clicks) > prop(Group A clicks)
+- alpha: 0.05
+
+### Question 3
+
+> You work as an analyst for a car manufacturing company - they have specific standards they must meet for standards and regulation purposes. You have been asked to check the quality control of the manufacture of a particular car part. You have been given data on a sample of 200 parts produced over the period of a week (the sampled parts were pulled at random from the production line and measured: the factory produced a lot more than 200 parts that week). The specification of the part stipulates a width of 145mm, and the manufacturing process is said to have ‘drifted’ if the mean width of parts differs significantly from 145mm. You want to use the sampled measurements to test whether the process overall has drifted.
+
+#### Answer
+
+- H0: mean(part_width) - 145 = 0
+- HA: mean(part_width) - 145 != 0
+- alpha: 0.01
+
+## Interpreting results
+
+### Question 1
+
+> Coffee shop problem. Significance level: 0.05, calculated p-value: 0.07
+
+#### Answer
+
+> 0.07 !< 0.05, therefore we must not reject the null hypothesis and it is likely that 40% or less of the people in the town have heard of the coffee shop
+
+### Question 2
+
+> Website company problem. Significance level: 0.01, p-value: 0.006
+
+#### Answer
+
+> 0.006 < 0.01, therefore we must reject the null hypothesis, and it is likely that the CTR is higher when the banner is at the top of the page.
+
+### Question 3
+
+> Manufacturing company problem. Significance level: 0.05, p-value: 0.55
+
+#### Answer
+
+> 0.55 !< 0.05, therefore we must not reject the null hypothesis and it is likely that the manufacturing process has not drifted.
