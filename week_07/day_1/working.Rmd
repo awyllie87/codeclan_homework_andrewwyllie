@@ -1,0 +1,231 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+library(tidyverse)
+library(tsibbledata)
+library(tsibble)
+library(feasts)
+library(lubridate)
+```
+```{r}
+### Manipulate the data to explore various time breakdowns
+nyc_bikes_df <- nyc_bikes %>% 
+  ### Produce Y/M/D columns, get day number for good measure, also quarter
+  mutate(year = year(start_time),
+         month = month(start_time, label = TRUE),
+         day = wday(start_time, label = TRUE),
+         day_no = day(start_time),
+         quarter = case_when(
+           month(start_time) < 4 ~ 1,
+           month(start_time) >= 4 & month(start_time) <= 6 ~ 2,
+           month(start_time) >= 7 & month(start_time) <= 9 ~ 3,
+           TRUE ~ 4
+         ),
+         .after = bike_id) %>% 
+  ### Rental duration
+  mutate(duration_mins = round(as.numeric(as.period(stop_time - start_time), "minutes"), 2),
+         .after = stop_time) %>% 
+  ### User age
+  mutate(age = year(start_time) - birth_year,
+         age_group = as.factor(case_when(
+           age < 18 ~ "Under 18",
+           age > 18 & age < 34 ~ "18-34",
+           age >= 35 & age <= 44  ~ "35-44",
+           age >= 45 & age <= 54  ~ "45-54",
+           age >= 55 & age <= 64  ~ "55-64",
+           TRUE ~ "65+"
+         )))
+
+### Create a tibble version to allow analysis of various groupings
+nyc_bikes_tibble <- as_tibble(nyc_bikes_df)
+```
+
+## Interesting data
+
+### Ride Type
+
+```{r}
+nyc_bikes_tibble %>% 
+  group_by(type) %>% 
+  summarise(count = n())
+```
+
+
+### Customer demographics
+
+```{r}
+nyc_bikes_tibble %>% 
+  group_by(gender) %>% 
+  summarise(no_rides = n())
+
+nyc_bikes_tibble %>% 
+  group_by(gender, type) %>% 
+  summarise(no_rides = n())
+
+nyc_bikes_tibble %>% 
+  group_by(gender) %>% 
+  ggplot(aes(x = gender, fill = type)) +
+  geom_bar()
+
+nyc_bikes_tibble %>% 
+  group_by(gender) %>% 
+  ggplot(aes(x = gender, fill = age_group)) +
+  geom_bar()
+
+nyc_bikes_tibble %>% 
+  ggplot(aes(x = age_group, fill = age_group)) +
+  geom_bar() +
+  facet_wrap(~gender, 
+             scales = "free_y") +
+  theme(legend.position = "bottom")
+```
+
+### Ride Count
+
+```{r}
+### Number of idle bikes per month
+
+nyc_bikes_df %>% 
+  index_by(day) %>% 
+  summarise(bikes_idle = length(unique(nyc_bikes_df$bike_id)) - length(unique(bike_id))) %>% 
+  ggplot(aes(x = day, y = bikes_idle)) +
+  geom_col() +
+  labs(title = "Idle Bikes per Day",
+       x = "Day",
+       y = "Number of Idle Bikes")
+
+nyc_bikes_df %>% 
+  index_by(month) %>% 
+  summarise(bikes_idle = length(unique(nyc_bikes_df$bike_id)) - length(unique(bike_id))) %>% 
+  ggplot(aes(x = month, y = bikes_idle)) +
+  geom_col() +
+  labs(title = "Idle Bikes per Month",
+       x = "Month",
+       y = "Number of Idle Bikes")
+
+nyc_bikes_df %>% 
+  index_by(quarter) %>% 
+  summarise(bikes_idle = length(unique(nyc_bikes_df$bike_id)) - length(unique(bike_id))) %>% 
+  ggplot(aes(x = quarter, y = bikes_idle)) +
+  geom_col() +
+  labs(title = "Idle Bikes per Quarter",
+       x = "Quarter",
+       y = "Number of Idle Bikes")
+
+nyc_bikes_df %>% 
+  index_by(year) %>% 
+  summarise(no_rides = n()) 
+
+nyc_bikes_df %>% 
+  index_by(quarter) %>% 
+  summarise(no_rides = n()) 
+
+nyc_bikes_df %>% 
+  index_by(month) %>%
+  summarise(no_rides = n(),
+            prop = (round(n() / nrow(nyc_bikes_df),3)) * 100)
+
+nyc_bikes_df %>% 
+  index_by(day) %>% 
+  summarise(no_rides = n())
+
+nyc_bikes_tibble %>% 
+  group_by(bike_id, month = month(start_time, label = TRUE, abbr = FALSE))  %>% 
+  summarise(no_rides = n()) %>% 
+  pivot_wider(names_from = month, values_from = no_rides) %>% 
+  relocate(January, .before = February)
+
+nyc_bikes_df %>% 
+  index_by(day) %>% 
+  ggplot(aes(x = day)) +
+  geom_bar()
+
+nyc_bikes_df %>% 
+  index_by(month) %>% 
+  ggplot(aes(x = month)) +
+  geom_bar()
+
+nyc_bikes_df %>% 
+  index_by(quarter) %>% 
+  ggplot(aes(x = quarter)) +
+  geom_bar()
+
+nyc_bikes_df %>% 
+  index_by(day) %>% 
+  ggplot(aes(x = day)) +
+  geom_bar() +
+  facet_wrap(~ month, scales = "free_y")
+
+nyc_bikes_df %>% 
+  index_by(day) %>% 
+  ggplot(aes(x = day)) +
+  geom_bar() +
+  facet_wrap(~ quarter, scales = "free_y")
+
+nyc_bikes_df %>% 
+  index_by(month) %>% 
+  ggplot(aes(x = month)) +
+  geom_bar() +
+  facet_wrap(~ day, scales = "free_y", ncol = 3)
+
+nyc_bikes_df %>% 
+  index_by(month) %>% 
+  ggplot(aes(x = month)) +
+  geom_bar() +
+  facet_wrap(~ quarter, scales = "free")
+```
+
+```{r}
+### Mean ride duration for every bike per month
+
+nyc_bikes_tibble %>% 
+  group_by(bike_id, month) %>% 
+  summarise(mean_duration = mean(duration_mins, na.rm = TRUE)) %>% 
+  pivot_wider(names_from = month, values_from = mean_duration) %>% 
+  relocate(Jan, .before = Feb)
+
+### Break down ride durations
+
+nyc_bikes_tibble %>% 
+  group_by(bike_id) %>% 
+  summarise(mean_duration = mean(duration_mins, na.rm = TRUE),
+            total_ride_time = sum(duration_mins),
+            max_ride_time = max(duration_mins),
+            min_ride_time = min(duration_mins)) 
+
+### Pull out the insane ones.
+
+nyc_bikes_df %>% 
+  filter(as_date(start_time) != as_date(stop_time) & duration_mins >= 30) %>% 
+  summarise(stop_time, duration_hours = round((duration_mins / 60), 2))
+
+nyc_bikes_tibble %>% 
+  group_by(bike_id) %>% 
+  summarise(total_ride_time_mins = sum(duration_mins))
+
+nyc_bikes_df %>% 
+  filter(duration_mins <= 24*60) %>% 
+  mutate(time = as_date(start_time)) %>% 
+  ggplot(aes(x = time, y = duration_mins, col = bike_id)) + 
+  geom_line()
+```
+
+```{r}
+nyc_bikes_df %>% 
+  index_by(month) %>%
+  summarise(no_rides = n()) %>% 
+  mutate(total = cumsum(no_rides)) %>% 
+  ggplot(aes(x = month, y = total, group = 1)) +
+  geom_smooth(method = "lm", se = FALSE, col = "black") +
+  geom_line(col = "blue") +
+  geom_point(col = "blue") +
+  labs(title = "Rides in 2018",
+       x = "Month",
+       y = "Total Rides")
+```
+
+
+
