@@ -9,6 +9,8 @@ library(tsibbledata)
 library(tsibble)
 library(feasts)
 library(lubridate)
+library(leaflet)
+library(sf)
 ```
 ```{r}
 ### Manipulate the data to explore various time breakdowns
@@ -175,7 +177,7 @@ nyc_bikes_df %>%
   index_by(month) %>% 
   ggplot(aes(x = month)) +
   geom_bar() +
-  facet_wrap(~ quarter, scales = "free")
+  facet_wrap(~ quarter, scales = "free_x")
 ```
 
 ```{r}
@@ -226,6 +228,106 @@ nyc_bikes_df %>%
        x = "Month",
        y = "Total Rides")
 ```
+```{r}
+nyc_bikes_tibble %>% 
+  group_by(bike_id) %>% 
+  select(start_time, start_station, end_station) %>% 
+  mutate(continues = as.character(end_station) == lead(as.character(start_station))) %>%
+  group_by(continues) %>% 
+  summarise(count = n())
+```
+
+## Stations and routes
+
+```{r}
+start_count <- nyc_bikes_tibble %>% 
+  group_by(start_station) %>% 
+  summarise(start_count = n()) %>% 
+  rename(station = start_station)
+
+end_count <- nyc_bikes_tibble %>% 
+  group_by(end_station) %>% 
+  summarise(end_count = n()) %>% 
+  rename(station = end_station)
+
+visit_count <- start_count %>% 
+  full_join(end_count, by = "station") %>% 
+  mutate(visit_count = start_count + end_count) %>% 
+  select(station, visit_count)
+
+stations <- nyc_bikes_tibble %>% 
+  select(end_station, end_lat, end_long) %>% 
+  distinct() %>% 
+  rename(station = end_station,
+         lat = end_lat,
+         long = end_long) %>% 
+  full_join(visit_count, by = "station")
+
+all_routes <- nyc_bikes_tibble %>% 
+  group_by(start_station, end_station) %>% 
+  summarise(count = n()) %>% 
+  ungroup() %>% 
+  mutate(start_station = as.character(start_station),
+         end_station = as.character(end_station))
+
+all_routes_expanded <- all_routes %>% 
+  left_join(stations, by = c("start_station" = "station")) %>%
+  rename(start_lat = lat,
+         start_long = long) %>% 
+  relocate(start_long, .before = start_lat) %>% 
+  select(-visit_count) %>% 
+  left_join(stations, by = c("end_station" = "station")) %>% 
+  rename(end_lat = lat,
+         end_long = long) %>% 
+  relocate(end_long, .before = end_lat) %>% 
+  select(-visit_count)
+
+
+all_routes_expanded_geom <- all_routes_expanded %>% 
+  mutate(geom = sprintf("LINESTRING(%s %s, %s %s)", 
+                        all_routes_expanded$start_long, all_routes_expanded$start_lat, 
+                        all_routes_expanded$end_long, all_routes_expanded$end_lat))
+
+all_routes_expanded_geom <- st_as_sf(all_routes_expanded_geom, wkt = "geom")
+
+all_routes_geom <- all_routes_expanded_geom %>% 
+  select(geom, count)
+
+top_10_routes <- all_routes %>% 
+  slice_max(count, n = 10)
+
+top_10_routes_expanded <- all_routes_expanded %>% 
+  slice_max(count, n = 10)
+
+top_10_routes_geom <- all_routes_geom %>% 
+  slice_max(count, n = 10)
+
+stations %>% 
+  filter(station %in% top_10_routes$start_station | station %in% top_10_routes$end_station) %>% 
+  leaflet() %>% 
+  addTiles() %>% 
+  addMarkers(lng = ~long, lat = ~lat, popup = ~paste("<strong>STATION: </strong>", station, 
+                                                     "<br><strong>VISIT COUNT: </strong>", visit_count)) %>% 
+  addPolylines(data = top_10_routes_geom, label = ~count)
+
+stations %>% 
+  leaflet() %>% 
+  addTiles() %>% 
+  addMarkers(popup = ~station) %>% 
+  addPolylines(data = all_routes_geom)
+
+#addMarkers(data = mapdata,
+#            lng = ~LONGITUDE,
+#           lat = ~LATITUDE,
+#          label = ~labels,
+#         popup = ~paste(conm, "<br>Building:", BUILDING,
+#                       "<br>Years active:", start, "to", end,
+#                      "<br>Revenue ($M) from", lowest_rev,
+#                     "to", highest_rev))
+```
+
+
+
 
 
 
