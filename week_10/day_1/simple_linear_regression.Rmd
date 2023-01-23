@@ -1,0 +1,49 @@
+---
+title: "Simple linear regression homework"
+output: html_notebook
+---
+
+```{r libraries}
+library(tidyverse)
+library(modelr)
+library(ggfortify)
+```
+
+```{r data}
+project <- read_csv("data/project_management.csv")
+```
+# MVP
+
+```{r}
+project %>% 
+    ggplot(aes(x = estimated_length, y = actual_length)) +
+    geom_point()
+```
+
+
+Correlation coefficient:
+
+```{r}
+cor(project$estimated_length, project$actual_length)
+```
+
+0.8 means strong positive correlation between estimated length and actual length
+
+
+```{r}
+model <- lm(formula = actual_length ~ estimated_length,
+   data = project)
+
+summary(model)
+```
+R squared suggests that 64.75% of the estimated job length can be explained by the actual job length.
+
+The p-value (1.91e-12) strongly suggests the contribution is statistically significant.
+
+```{r}
+autoplot(model)
+```
+
+Residuals vs Fitted broadly suggests that the residuals are independent, and the quantile-quantile plot implies a normal distribution. On top of this, Scale-Location suggests that the variation of the residuals is reasonably constant.
+
+All three plots together support the p-value as being reliable, meaning that the estimated job time is in fact broadly based in reality.
