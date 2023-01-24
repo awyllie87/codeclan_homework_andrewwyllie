@@ -1,0 +1,95 @@
+---
+title: "Homework - features and elements of multiple regression"
+output: html_notebook
+---
+
+```{r libraries}
+library(tidyverse)
+library(ggfortify)
+library(GGally)
+library(fastDummies)
+```
+
+```{r}
+housing_prices <- read_csv("data/housing_prices.csv")
+```
+
+```{r}
+housing_prices %>% 
+    select(total_rooms, total_bedrooms) %>% 
+ggpairs()
+```
+
+```{r}
+housing_prices_nototal <- housing_prices %>% 
+    select(-total_bedrooms)
+```
+
+```{r}
+ggpairs(housing_prices_nototal, progress = FALSE)
+```
+
+```{r}
+housing_prices_nototal %>% 
+    ggplot(aes(x = median_income, y = median_house_value)) +
+    geom_point()
+
+housing_prices_nototal %>% 
+    group_by(ocean_proximity) %>% 
+    summarise(house_value = mean(median_house_value)) %>% 
+    ggplot(aes(x = ocean_proximity, y = house_value)) +
+    geom_col()
+```
+```{r}
+unique(housing_prices_nototal$ocean_proximity)
+```
+5 levels, expect 4 dummy variables
+
+```{r}
+model <- lm(median_house_value ~ median_income,
+            data = housing_prices_nototal)
+
+autoplot(model)
+summary(model)
+```
+
+```{r}
+model_2 <- lm(median_house_value ~ median_income + total_rooms,
+            data = housing_prices_nototal)
+
+autoplot(model_2)
+summary(model_2)
+```
+
+Residuals look fine, but total_rooms p = 0.86, so it's far from statistically significant.
+
+```{r}
+housing_prices_nt_dummy <- housing_prices_nototal %>% 
+    dummy_cols(select_columns = "ocean_proximity",
+               remove_first_dummy = TRUE,
+               remove_selected_columns = TRUE) %>% 
+    janitor::clean_names() %>% 
+    mutate(across(ocean_proximity_inland:ocean_proximity_near_ocean, as.logical))
+```
+
+summary(housing_prices_nt_dummy)
+
+```{r}
+model_3 <- lm(median_house_value ~ median_income + ocean_proximity_inland,
+            data = housing_prices_nt_dummy)
+
+autoplot(model_3)
+summary(model_3)
+```
+
+Inland homes are statistically significant, the diagnostics look good, and increase r^2 by 0.135!
+
+
+```{r}
+model_interaction <- lm(median_house_value ~ median_income + ocean_proximity_inland + median_income:ocean_proximity_inland,
+            data = housing_prices_nt_dummy)
+
+autoplot(model_interaction)
+summary(model_interaction)
+```
+
