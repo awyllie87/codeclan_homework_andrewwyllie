@@ -86,7 +86,7 @@ Inland homes are statistically significant, the diagnostics look good, and incre
 
 
 ```{r}
-model_interaction <- lm(median_house_value ~ median_income + ocean_proximity_inland + median_income:ocean_proximity_inland,
+model_interaction <- lm(median_house_value ~ median_income + ocean_proximity_inland + log(median_income):ocean_proximity_inland,
             data = housing_prices_nt_dummy)
 
 autoplot(model_interaction)
