@@ -1,0 +1,268 @@
+---
+title: "Manual model development homework"
+output: html_notebook
+---
+
+```{r}
+library(tidyverse)
+library(modelr)
+library(GGally)
+library(ggfortify)
+```
+
+```{r}
+kc_houses <- read_csv("data/kc_house_data.csv")
+```
+
+Ok, we don't need `id` or `date`. They dont tell us much.
+
+Going to argue in favour of `zip` staying: it's a good grouping to compare neighbourhoods, so may work as a categorical. Will toss `lat` and `long` instead...
+
+`sqft_living15` and `sqft_lot15` are interesting variables, but I don't think I'll be looking to derive anything from how big nearby properties are. Bye!
+
+```{r}
+kc_houses_trim <- kc_houses %>% 
+    select(-c(id, date, lat, long, sqft_living15, sqft_lot15))
+```
+
+Next! `waterfront` is a boolean, so let's convert it to a logical. 
+`yr_renovated` is interesting, but I think I agree that for our purposes, simply acknowledging a renovation has been done might be more practical. Convert it to a logical. 
+`view`, `condition` and `grade` are all ordinal data, i think!
+
+```{r}
+kc_houses_tidy <- kc_houses_trim %>% 
+    mutate(waterfront = as.logical(waterfront),
+           yr_renovated = as.logical(yr_renovated),
+           view = factor(view, order = TRUE, levels = 0:4),
+           condition = factor(condition, order = TRUE, levels = 1:5),
+           grade = factor(grade, order = TRUE, levels = 1:13))
+```
+
+```{r}
+alias(lm(price ~ ., data = kc_houses_tidy))
+```
+
+sqft_basement can be calculated by sqft_living - sqft_above. Chuck it.
+
+```{r}
+kc_houses_tidy <- kc_houses_tidy %>% 
+    select(-sqft_basement)
+
+alias(lm(price ~ ., data = kc_houses_tidy))
+```
+Sorted. Model time
+
+```{r message=FALSE, warning = FALSE}
+ggpairs(kc_houses_tidy)
+```
+
+bedrooms : 0.308***
+bathrooms : 0.525***
+sqft_living : 0.702***
+sqft_lot : 0.090***
+floors : 0.257***
+sqft_above : 0.606***
+yr_built : 0.054***
+view : seems more spread
+condition : middle to top
+grade : stacked to the higher grades
+
+Let's try sqft_living, bedrooms, grade, condition
+
+```{r}
+mod1a <- lm(price ~ sqft_living,
+            data = kc_houses_tidy)
+
+summary(mod1a)
+autoplot(mod1a)
+```
+
+```{r}
+mod1b <- lm(price ~ bedrooms,
+            data = kc_houses_tidy)
+
+summary(mod1b)
+autoplot(mod1b)
+```
+
+```{r}
+mod1c <- lm(price ~ grade,
+            data = kc_houses_tidy)
+
+summary(mod1c)
+autoplot(mod1c)
+```
+
+```{r}
+mod1d <- lm(price ~ condition,
+            data = kc_houses_tidy)
+
+summary(mod1d)
+autoplot(mod1d)
+```
+
+r^2
+1a: 0.4929
+1b: 0.09508
+1c: 0.5197
+1d: 0.006878
+
+chuck b and d
+
+1a:
+    r^2: 0.4929
+    p: < 0.001
+    Not loving Scale-Location here, but going to go ahead with it.
+
+1c:
+    r^2: 0.5197
+    p: varies between < 0.001 to 0.78
+    Q-Q test fails
+    
+```{r}
+houses_remaining_resid <- kc_houses_tidy %>% 
+    add_residuals(model = mod1a) %>% 
+    select(-c(price, sqft_living))
+```
+
+```{r message=FALSE, warning=FALSE}
+houses_remaining_resid %>% 
+    ggpairs()
+```
+Need to throw grade in again. Let's do that, yr_built and bedrooms again
+
+```{r}
+mod2a <- lm(price ~ sqft_living + grade,
+            data = kc_houses_tidy)
+
+summary(mod2a)
+autoplot(mod2a)
+```
+
+```{r}
+mod2b <- lm(price ~ sqft_living + yr_built,
+            data = kc_houses_tidy)
+
+summary(mod2b)
+autoplot(mod2b)
+```
+
+```{r}
+mod2c <- lm(price ~ sqft_living + bedrooms,
+            data = kc_houses_tidy)
+
+summary(mod2c)
+autoplot(mod2c)
+```
+
+previous r^2: 0.49
+
+a: 0.5817
+b: 0.5247
+c: 0.5068
+
+need to look at anova on a
+
+```{r}
+anova(mod1a, mod2a)
+```
+I'm honestly not a fan of any of these diagnostics, but gonna throw in grade. it's significant, notably adds to r-squared.
+
+```{r}
+houses_remaining_resid <- kc_houses_tidy %>% 
+    add_residuals(model = mod2a) %>% 
+    select(-c(price, sqft_living, grade))
+```
+
+```{r message=FALSE, warning=FALSE}
+ggpairs(houses_remaining_resid)
+```
+
+condition and waterfront getting interesting now. yr_built still a contender
+
+```{r}
+mod3a <- lm(price ~ sqft_living + grade + condition,
+            data = kc_houses_tidy)
+
+summary(mod3a)
+autoplot(mod3a)
+```
+
+```{r}
+mod3b <- lm(price ~ sqft_living + grade + waterfront,
+            data = kc_houses_tidy)
+
+summary(mod3b)
+autoplot(mod3b)
+```
+
+```{r}
+mod3c <- lm(price ~ sqft_living + grade + yr_built,
+            data = kc_houses_tidy)
+
+summary(mod3c)
+autoplot(mod3c)
+```
+
+I'm liking yr_built. Brings us to 0.63, diagnostics continue to suck in the same ways as before.
+
+```{r}
+houses_remaining_resid <- kc_houses_tidy %>% 
+    add_residuals(model = mod3c) %>% 
+    select(-c(price, sqft_living, grade, yr_built))
+```
+
+```{r message=FALSE, warning=FALSE}
+ggpairs(houses_remaining_resid)
+```
+
+One last round. I like waterfront still, but let's check condition, view  and renovation too.
+
+```{r}
+mod4a <- lm(price ~ sqft_living + grade + yr_built + waterfront,
+            data = kc_houses_tidy)
+
+summary(mod4a)
+autoplot(mod4a)
+```
+
+```{r}
+mod4b <- lm(price ~ sqft_living + grade + yr_built + condition,
+            data = kc_houses_tidy)
+
+summary(mod4b)
+autoplot(mod4b)
+```
+
+```{r}
+mod4c <- lm(price ~ sqft_living + grade + yr_built + view,
+            data = kc_houses_tidy)
+
+summary(mod4c)
+autoplot(mod4c)
+```
+
+```{r}
+mod4d <- lm(price ~ sqft_living + grade + yr_built + yr_renovated,
+            data = kc_houses_tidy)
+
+summary(mod4d)
+autoplot(mod4d)
+```
+
+waterfront and view are in contention
+
+let's have a look at anova of view
+
+```{r}
+anova(mod3c, mod4c)
+```
+
+view is significant. r squared is basically a tie with waterfront, but waterfront is slightly higher, so my winning model at 4 stages is mod4a
+
+price ~ sqft_living + grade + yr_built + waterfront
+
+Which anticipates that size, quality of construction, age (older is better), and whether it's by the water or not, are the best predictors of value.
+
+Seems reasonable to me!
+
