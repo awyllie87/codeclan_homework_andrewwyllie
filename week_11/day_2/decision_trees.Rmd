@@ -1,0 +1,87 @@
+---
+title: "Titanic decisions"
+output: html_notebook
+---
+
+- sex: Biological Sex, male or female
+- class : Ticket class, 1 = 1st (Upper class), 2 = 2nd (Middle Class), 3 = 3rd (Lower Class)
+- embarkation: C = Cherbourg, Q = Queenstown, S = Southampton
+- sibsp : number of siblings / spouses aboard the Titanic
+- parch: number of parents / children aboard the Titanic. Some children travelled only with a nanny, therefore parch=0 for them.
+- survived_flag : did they survive, 0 = No, 1 = Yes
+
+```{r}
+library(rpart)
+library(rpart.plot)
+library(tidyverse)
+
+titanic_set <- read_csv('data/titanic_decision_tree_data.csv')
+
+shuffle_index <- sample(1:nrow(titanic_set))
+
+# shuffle the data so class order isn't in order - need this for training/testing split later on 
+titanic_set <- titanic_set[shuffle_index, ]
+```
+
+```{r}
+titanic_set_clean <- titanic_set %>% 
+  select(-c(1, passenger_id, name, ticket, cabin, fare)) %>% 
+  drop_na() %>% 
+  mutate(sex = factor(sex, levels = c("male", "female"), labels = c("Male", "Female")),
+         survived = factor(survived, levels = c(0, 1), labels = c("No", "Yes")),
+         pclass = factor(pclass, levels = c(1, 2, 3), labels = c("1st", "2nd", "3rd")),
+         embarked = factor(embarked, levels = c("C", "Q", "S"), labels = c("Cherbourg", "Queenstown", "Southampton")),
+         age_status = if_else(age > 16, "Adult", "Child"))
+```
+
+```{r}
+titanic_set_clean %>% 
+  ggplot(aes(x = age)) +
+  geom_histogram()
+
+titanic_set_clean %>% 
+  ggplot(aes(x = survived, fill = sex)) +
+  geom_bar()
+
+titanic_set_clean %>% 
+  ggplot(aes(x = survived, fill = age_status)) +
+  geom_bar()
+
+titanic_set_clean %>% 
+  ggplot(aes(x = survived, fill = pclass)) +
+  geom_bar()
+
+titanic_set_clean %>% 
+  ggplot(aes(x = survived, fill = embarked)) +
+  geom_bar()
+```
+
+Looks like ticket class, age_status, and sex might be useful for predicting death.
+
+```{r}
+sets <- splitstackshape::stratified(titanic_set_clean, c("survived"), 0.8, bothSets = TRUE)
+
+test_set <- sets$SAMP2
+train_set <- sets$SAMP1
+```
+
+Use an 80/20 split, so most of the data is being used for training. Used `stratified` to keep the survivors the same, proportionally, on both data sets.
+
+```{r}
+titanic_fit <- rpart(
+  formula = survived ~ .,
+  data = train_set,
+  method = "class"
+)
+
+rpart.plot(titanic_fit,
+           yesno = 2, # 0 = don't write yes/no, 1: write y/n at the top, 2: write y/n at all splits
+           fallen.leaves = TRUE,
+           faclen = 5,
+           digits = 3,
+           split.border.col = 1,
+           cex = 0.8)
+```
+
+
+
