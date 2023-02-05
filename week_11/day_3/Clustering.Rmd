@@ -1,0 +1,106 @@
+---
+title: "Clustering"
+output: html_notebook
+---
+
+```{r}
+library(tidyverse)
+library(factoextra)
+```
+
+```{r}
+customers <- read_csv("data/mall_customers.csv")
+```
+
+```{r}
+colSums(is.na(customers))
+```
+```{r}
+glimpse(customers)
+```
+```{r}
+summary(customers)
+```
+
+200 customers identified by age and gender, big range of incomes, some arbitrary metric about their spending.
+
+No NAs, need to do some cleaning to work with it.
+
+```{r}
+customers_clean <- customers %>% 
+  janitor::clean_names()
+```
+
+```{r}
+# scale it
+customers_test <- customers_clean %>% 
+    select(spending_score_1_100, annual_income_k)
+
+customers_scaled <- customers_clean %>% 
+  select(spending_score_1_100, annual_income_k) %>% 
+  mutate(across(everything(), scale)) 
+```
+
+```{r}
+# ID correct cluster number
+
+fviz_nbclust(customers_scaled,
+             FUNcluster = kmeans,
+             method = "wss",
+             nstart = 20)
+
+fviz_nbclust(customers_scaled,
+             FUNcluster = kmeans,
+             method = "silhouette",
+             nstart = 20)
+
+fviz_nbclust(customers_scaled,
+             FUNcluster = kmeans,
+             method = "gap_stat",
+             nstart = 20,
+             k.max = 20)
+```
+
+Lot of agreement on 5 clusters
+
+
+```{r}
+# K-means time!
+customers_clustered <- kmeans(customers_scaled,
+                              centers = 5,
+                              nstart = 25)
+
+customers_clustered
+```
+```{r}
+customers_kmeans <- kmeans(customers_scaled, centers = 5, nstart = 20)
+
+customers_augmented <- broom::augment(customers_kmeans, customers_clean)
+
+customers_augmented %>% 
+  ggplot(aes(spending_score_1_100, annual_income_k, colour = .cluster)) +
+  geom_point()
+```
+
+Cluster 5: wealthy, bad spender
+Cluster 4: Big spender, big income (the whales!)
+Cluster 3: Big spender, low income
+Cluster 2: Low spender, low income
+Cluster 1: Average Customer
+
+```{r}
+cluster_summary <- customers_augmented %>% 
+  group_by(.cluster) %>% 
+  summarise(mean_age = mean(age),
+            mean_score = mean(spending_score_1_100),
+            mean_income_k = mean(annual_income_k))
+
+gender_split <- customers_augmented %>% 
+  group_by(.cluster, gender) %>% 
+  summarise(count = n()) %>% 
+  pivot_wider(names_from = gender, values_from = count)
+
+left_join(cluster_summary, gender_split) %>% 
+  relocate(mean_age, .after = Male)
+```
+
